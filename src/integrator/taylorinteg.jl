@@ -55,23 +55,24 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     t = t0 + Taylor1( T, order )
     x = Taylor1( x0, order )
 
+    # Allocation
+    tv = Array{T}(undef, maxsteps + 1)
+    xv = Array{U}(undef, maxsteps + 1)
+    psol = init_psol(Val(dense), xv, x)
+
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
 
     # Re-initialize the Taylor1 expansions
     t = t0 + Taylor1( T, order )
     x = Taylor1( x0, order )
-    return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, params; parse_eqs, maxsteps)
+    return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, tv, xv, psol, params; parse_eqs, maxsteps)
 end
 
 function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
-        x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, params;
-        parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number, D}
-
-    # Allocation
-    tv = Array{T}(undef, maxsteps+1)
-    xv = Array{U}(undef, maxsteps+1)
-    psol = init_psol(dense, xv, x)
+        x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, tv::Vector{T},
+        xv::Vector{U}, psol, params;
+        parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
     # Initial conditions
     nsteps = 1
@@ -118,6 +119,12 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
         dx[i] = Taylor1( zero(q0[i]), order )
     end
 
+    # Allocation of output
+    tv = Array{T}(undef, maxsteps + 1)
+    xv = Array{U}(undef, dof, maxsteps + 1)
+    psol = init_psol(Val(dense), xv, x)
+    xaux = Array{Taylor1{U}}(undef, dof)
+
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
 
@@ -126,12 +133,12 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
     x .= Taylor1.( q0, order )
     dx .= Taylor1.( zero.(q0), order)
     return _taylorinteg!(Val(dense), f!, t, x, dx, q0, t0, tmax, abstol, rv,
-        params; parse_eqs, maxsteps)
+        tv, xv, psol, xaux, params; parse_eqs, maxsteps)
 end
 
 function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, params;
-        parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number, D}
+        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, tv::Vector{T}, xv::Matrix{U}, psol, xaux::Vector{Taylor1{U}}, params;
+        parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
     # Initialize the vector of Taylor1 expansions
     dof = length(q0)
