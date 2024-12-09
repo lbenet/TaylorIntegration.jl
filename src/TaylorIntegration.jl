@@ -14,6 +14,7 @@ end
 export TaylorSolution, taylorinteg, lyap_taylorinteg, @taylorize
 
 include("parse_eqs.jl")
+include("integrator/cache.jl")
 include("integrator/jetcoeffs.jl")
 include("integrator/stepsize.jl")
 include("integrator/taylorstep.jl")

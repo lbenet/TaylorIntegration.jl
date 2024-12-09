@@ -23,6 +23,7 @@ end
 end
 @inline set_psol!(::Val{false}, args...) = nothing
 
+# init_psol
 @doc doc"""
     init_psol(::Val{true}, xv::Array{U,1}, x::Taylor1{U}) where {U<:Number}
     init_psol(::Val{true}, xv::Array{U,2}, x::Array{Taylor1{U},1}) where {U<:Number}
@@ -36,16 +37,24 @@ appropriate array is allocated and returned; this array is where the Taylor poly
 associated to the solution will be stored, corresponding to field `:p` in
 [`TaylorSolution`](@ref).
 """
-@inline function init_psol(::Val{true}, xv::Array{U,1}, x::Taylor1{U}) where {U<:Number}
+@inline function init_psol(::Val{true}, xv::Array{U,1}, ::Taylor1{U}) where {U<:Number}
     return Array{Taylor1{U}}(undef, size(xv, 1)-1)
 end
-@inline function init_psol(::Val{true}, xv::Array{U,2}, x::Array{Taylor1{U},1}) where {U<:Number}
+@inline function init_psol(::Val{true}, xv::Array{U,2}, ::Array{Taylor1{U},1}) where {U<:Number}
     return Array{Taylor1{U}}(undef, size(xv, 1), size(xv, 2)-1)
 end
 
-# init_psol
+@inline function init_psol(::Val{true}, maxsteps::Int, ::Int, ::Taylor1{U}) where {U<:Number}
+    return Array{Taylor1{U}}(undef, maxsteps)
+end
+@inline function init_psol(::Val{true}, maxsteps::Int, dof::Int, ::Array{Taylor1{U},1}) where {U<:Number}
+    return Array{Taylor1{U}}(undef, dof, maxsteps)
+end
+
 @inline init_psol(::Val{false}, ::Array{U,1}, ::Taylor1{U}) where {U<:Number} = nothing
 @inline init_psol(::Val{false}, ::Array{U,2}, ::Array{Taylor1{U},1}) where {U<:Number} = nothing
+@inline init_psol(::Val{false}, ::Int, ::Int, ::Taylor1{U}) where {U<:Number} = nothing
+@inline init_psol(::Val{false}, ::Int, ::Int, ::Array{Taylor1{U},1}) where {U<:Number} = nothing
 
 # taylorinteg
 function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = nothing;
@@ -56,9 +65,10 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     x = Taylor1( x0, order )
 
     # Allocation
-    tv = Array{T}(undef, maxsteps + 1)
-    xv = Array{U}(undef, maxsteps + 1)
-    psol = init_psol(Val(dense), xv, x)
+    cache = TaylorIntegrationScalarCache(
+        Array{T}(undef, maxsteps + 1),
+        Array{U}(undef, maxsteps + 1),
+        init_psol(Val(dense), maxsteps, 1, x))
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
@@ -66,19 +76,19 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     # Re-initialize the Taylor1 expansions
     t = t0 + Taylor1( T, order )
     x = Taylor1( x0, order )
-    return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, tv, xv, psol, params; parse_eqs, maxsteps)
+    # return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, tv, xv, psol, params; parse_eqs, maxsteps)
+    return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
 function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
-        x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, tv::Vector{T},
-        xv::Vector{U}, psol, params;
+        x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationScalarCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
     # Initial conditions
     nsteps = 1
     @inbounds t[0] = t0
-    @inbounds tv[1] = t0
-    @inbounds xv[1] = x0
+    @inbounds cache.tv[1] = t0
+    @inbounds cache.xv[1] = x0
     sign_tstep = copysign(1, tmax-t0)
 
     # Integration
@@ -87,13 +97,13 @@ function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         x0 = evaluate(x, δt) # new initial condition
-        set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
+        set_psol!(dense, cache.psol, nsteps, x) # Store the Taylor polynomial solution
         @inbounds x[0] = x0
         t0 += δt
         @inbounds t[0] = t0
         nsteps += 1
-        @inbounds tv[nsteps] = t0
-        @inbounds xv[nsteps] = x0
+        @inbounds cache.tv[nsteps] = t0
+        @inbounds cache.xv[nsteps] = x0
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -102,7 +112,7 @@ function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
         end
     end
 
-    return build_solution(tv, xv, psol, nsteps)
+    return build_solution(cache.tv, cache.xv, cache.psol, nsteps)
 end
 
 
@@ -119,11 +129,12 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
         dx[i] = Taylor1( zero(q0[i]), order )
     end
 
-    # Allocation of output
-    tv = Array{T}(undef, maxsteps + 1)
-    xv = Array{U}(undef, dof, maxsteps + 1)
-    psol = init_psol(Val(dense), xv, x)
-    xaux = Array{Taylor1{U}}(undef, dof)
+    # Allocation
+    cache = TaylorIntegrationVectorCache(
+        Array{T}(undef, maxsteps + 1),
+        Array{U}(undef, dof, maxsteps + 1),
+        init_psol(Val(dense), maxsteps, dof, x),
+        Array{Taylor1{U}}(undef, dof))
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
@@ -133,37 +144,28 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
     x .= Taylor1.( q0, order )
     dx .= Taylor1.( zero.(q0), order)
     return _taylorinteg!(Val(dense), f!, t, x, dx, q0, t0, tmax, abstol, rv,
-        tv, xv, psol, xaux, params; parse_eqs, maxsteps)
+        cache, params; parse_eqs, maxsteps)
 end
 
 function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, tv::Vector{T}, xv::Matrix{U}, psol, xaux::Vector{Taylor1{U}}, params;
+        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
-
-    # Initialize the vector of Taylor1 expansions
-    dof = length(q0)
-
-    # Allocation of output
-    tv = Array{T}(undef, maxsteps+1)
-    xv = Array{U}(undef, dof, maxsteps+1)
-    psol = init_psol(dense, xv, x)
-    xaux = Array{Taylor1{U}}(undef, dof)
 
     # Initial conditions
     @inbounds t[0] = t0
     x0 = deepcopy(q0)
-    @inbounds tv[1] = t0
-    @inbounds xv[:,1] .= q0
+    @inbounds cache.tv[1] = t0
+    @inbounds cache.xv[:,1] .= q0
     sign_tstep = copysign(1, tmax-t0)
 
     # Integration
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, abstol, params, rv) # δt is positive!
+        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, abstol, params, rv) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         evaluate!(x, δt, x0) # new initial condition
-        set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
+        set_psol!(dense, cache.psol, nsteps, x) # Store the Taylor polynomial solution
         @inbounds for i in eachindex(x0)
             x[i][0] = x0[i]
             TaylorSeries.zero!(dx[i], 0)
@@ -171,8 +173,8 @@ function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1},
         t0 += δt
         @inbounds t[0] = t0
         nsteps += 1
-        @inbounds tv[nsteps] = t0
-        @inbounds xv[:,nsteps] .= deepcopy.(x0)
+        @inbounds cache.tv[nsteps] = t0
+        @inbounds cache.xv[:,nsteps] .= deepcopy.(x0)
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -181,7 +183,7 @@ function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1},
         end
     end
 
-    return build_solution(tv, xv, psol, nsteps)
+    return build_solution(cache.tv, cache.xv, cache.psol, nsteps)
 end
 
 @doc doc"""
@@ -288,28 +290,31 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
     t = t0 + Taylor1( T, order )
     x = Taylor1( x0, order )
 
+    # Allocation
+    nn = length(trange)
+    cache = TaylorIntegrationScalarCache(
+        trange,
+        Array{U}(undef, nn),
+        init_psol(Val(false), maxsteps, 1, x))
+    fill!(cache.xv, T(NaN))
+
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
 
     # Re-initialize the Taylor1 expansions
     t = t0 + Taylor1( T, order )
     x = Taylor1( x0, order )
-    return _taylorinteg!(f, t, x, x0, trange, abstol, rv, params; parse_eqs, maxsteps)
+    return _taylorinteg!(f, t, x, x0, trange, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
 function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractVector{T},
-        abstol::T, rv::RetAlloc{Taylor1{U}}, params; parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
-
-    # Allocation
-    nn = length(trange)
-    xv = Array{U}(undef, nn)
-    fill!(xv, T(NaN))
+        abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationScalarCache, params; parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
     @inbounds t[0] = t0
-    @inbounds xv[1] = x0
+    @inbounds cache.xv[1] = x0
 
     # Integration
     iter = 2
@@ -323,12 +328,12 @@ function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractV
         # Evaluate solution at times within convergence radius
         while sign_tstep*t1 < sign_tstep*tnext
             x1 = evaluate(x, t1-t0)
-            @inbounds xv[iter] = x1
+            @inbounds cache.xv[iter] = x1
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds xv[iter] = x0
+            @inbounds cache.xv[iter] = x0
             break
         end
         @inbounds x[0] = x0
@@ -342,7 +347,7 @@ function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractV
             break
         end
     end
-    return build_solution(trange, xv)
+    return build_solution(trange, cache.xv)
 end
 
 function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
@@ -362,6 +367,21 @@ function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     x .= Taylor1.( q0, order )
     dx .= Taylor1.( zero.(q0), order )
 
+    # Allocation
+    nn = length(trange)
+    dof = length(q0)
+    cache = TaylorIntegrationVectorTRangeCache(
+        trange,
+        Array{U}(undef, dof, nn),
+        init_psol(Val(false), maxsteps, dof, x),
+        Array{Taylor1{U}}(undef, dof),
+        similar(q0),
+        similar(q0))
+    fill!(cache.x0, T(NaN))
+    for ind in 1:nn
+        @inbounds cache.xv[:,ind] .= cache.x0
+    end
+
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
 
@@ -370,56 +390,44 @@ function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     x .= Taylor1.( q0, order )
     dx .= Taylor1.( zero.(q0), order )
     return _taylorinteg!(f!, t, x, dx, q0, trange, abstol, rv,
-        params; parse_eqs, maxsteps)
+        cache, params; parse_eqs, maxsteps)
 end
 
 function _taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, params;
+        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
-
-    # Allocation
-    nn = length(trange)
-    dof = length(q0)
-    x0 = similar(q0, eltype(q0), dof)
-    x1 = similar(x0)
-    fill!(x0, T(NaN))
-    xv = Array{eltype(q0)}(undef, dof, nn)
-    for ind in 1:nn
-        @inbounds xv[:,ind] .= x0
-    end
-    xaux = Array{Taylor1{U}}(undef, dof)
 
     # Initial conditions
     @inbounds t[0] = trange[1]
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
     # x .= Taylor1.(q0, order)
-    @inbounds x0 .= q0
-    @inbounds xv[:,1] .= q0
+    @inbounds cache.x0 .= deepcopy(q0)
+    @inbounds cache.xv[:,1] .= q0
 
     # Integration
     iter = 2
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, abstol, params, rv) # δt is positive!
+        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, abstol, params, rv) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, x0) # new initial condition
+        evaluate!(x, δt, cache.x0) # new initial condition
         tnext = t0+δt
         # Evaluate solution at times within convergence radius
         while sign_tstep*t1 < sign_tstep*tnext
-            evaluate!(x, t1-t0, x1)
-            @inbounds xv[:,iter] .= x1
+            evaluate!(x, t1-t0, cache.x1)
+            @inbounds cache.xv[:,iter] .= cache.x1
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds xv[:,iter] .= x0
+            @inbounds cache.xv[:,iter] .= cache.x0
             break
         end
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-            dx[i][0] = zero(x0[i])
+        @inbounds for i in eachindex(cache.x0)
+            x[i][0] = cache.x0[i]
+            dx[i][0] = zero(cache.x0[i])
         end
         t0 = tnext
         @inbounds t[0] = t0
@@ -432,7 +440,7 @@ function _taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Tayl
         end
     end
 
-    return build_solution(trange, xv)
+    return build_solution(trange, cache.xv)
 end
 
 
