@@ -42,9 +42,6 @@ struct TaylorIntegrationVectorTRangeCache{TV, XV, PSOL, XAUX, X0, X1} <: Abstrac
     x1::X1
 end
 
-x0(c::TaylorIntegrationVectorTRangeCache) = c.x0
-x1(c::TaylorIntegrationVectorTRangeCache) = c.x1
-
 # TaylorIntegrationLyapunovSpectrumCache
 
 struct TaylorIntegrationLyapunovSpectrumCache{TV, XV, PSOL, XAUX, X0, Λ, ΛTSUM, ΔX, DΔX, JAC, VARSAUX, QQH, RRH, AJ, QI, VJ} <: AbstractTaylorIntegrationVectorCache
@@ -68,13 +65,13 @@ end
 
 # TaylorIntegrationLyapunovSpectrumTRangeCache
 
-struct TaylorIntegrationLyapunovSpectrumTRangeCache{TV, XV, PSOL, XAUX, X0, X1, Λ, ΛTSUM, ΔX, DΔX, JAC, VARSAUX, QQH, RRH, AJ, QI, VJ} <: AbstractTaylorIntegrationVectorCache
+struct TaylorIntegrationLyapunovSpectrumTRangeCache{TV, XV, PSOL, XAUX, X0, Q1, Λ, ΛTSUM, ΔX, DΔX, JAC, VARSAUX, QQH, RRH, AJ, QI, VJ} <: AbstractTaylorIntegrationVectorCache
     tv::TV
     xv::XV
     psol::PSOL
     xaux::XAUX
     x0::X0
-    x1::X1
+    q1::Q1
     λ::Λ
     λtsum::ΛTSUM
     δx::ΔX

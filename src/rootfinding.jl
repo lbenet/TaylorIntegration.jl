@@ -244,6 +244,8 @@ function _taylorinteg!(dense::Val{D}, f!, g, t::Taylor1{T}, x::Array{Taylor1{U},
         parse_eqs::Bool=true, maxsteps::Int=500, eventorder::Int=0,
         newtoniter::Int=10, nrabstol::T=eps(T)) where {T <: Real,U <: Number, D}
 
+    @unpack tv, xv, psol, xaux = cache
+
     # Initial conditions
     order = get_order(t)
     @inbounds t[0] = t0
@@ -354,11 +356,13 @@ function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{T
         q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500, eventorder::Int=0, newtoniter::Int=10, nrabstol::T=eps(T)) where {T <: Real,U <: Number}
 
+    @unpack tv, xv, xaux, x0, x1 = cache
+
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
-    cache.x0 .= deepcopy(q0)
-    @inbounds cache.xv[:,1] .= deepcopy(q0)
+    x0 .= deepcopy(q0)
+    @inbounds xv[:,1] .= deepcopy(q0)
 
     # Some auxiliary arrays for root-finding/event detection/Poincaré surface of section evaluation
     g_tupl = g(dx, x, params, t)
@@ -372,7 +376,7 @@ function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{T
     g_dg_val = vcat(evaluate(g_tupl[2]), evaluate(g_tupl_old[2]))
 
     tvS = Array{U}(undef, maxsteps+1)
-    xvS = similar(cache.xv)
+    xvS = similar(xv)
     gvS = similar(tvS)
 
     # Integration
@@ -381,20 +385,20 @@ function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{T
     nevents = 1 #number of detected events
     while sign_tstep*t0 < sign_tstep*tmax
         δt_old = δt
-        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, abstol, params, rv) # δt is positive!
+        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, abstol, params, rv) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, cache.x0) # new initial condition
+        evaluate!(x, δt, x0) # new initial condition
         tnext = t0+δt
         # Evaluate solution at times within convergence radius
         while sign_tstep*t1 < sign_tstep*tnext
-            evaluate!(x, t1-t0, cache.x1)
-            @inbounds cache.xv[:,iter] .= deepcopy(cache.x1)
+            evaluate!(x, t1-t0, x1)
+            @inbounds xv[:,iter] .= deepcopy(x1)
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds cache.xv[:,iter] .= deepcopy(cache.x0)
+            @inbounds xv[:,iter] .= deepcopy(x0)
             break
         end
         g_tupl = g(dx, x, params, t)
@@ -402,8 +406,8 @@ function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{T
             tvS, xvS, gvS, t0, δt_old, x_dx, x_dx_val, g_dg, g_dg_val,
             nrabstol, newtoniter, nevents)
         g_tupl_old = deepcopy(g_tupl)
-        @inbounds for i in eachindex(cache.x0)
-            x[i][0] = cache.x0[i]
+        @inbounds for i in eachindex(x0)
+            x[i][0] = x0[i]
         end
         t0 = tnext
         @inbounds t[0] = t0
@@ -416,5 +420,5 @@ function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{T
         end
     end
 
-    return build_solution(trange, cache.xv, tvS, xvS, gvS, nevents)
+    return build_solution(trange, xv, tvS, xvS, gvS, nevents)
 end

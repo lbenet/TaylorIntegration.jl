@@ -307,6 +307,8 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
         rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationLyapunovSpectrumCache, params, jacobianfunc!; parse_eqs::Bool=true,
         maxsteps::Int=500) where {T<:Real, U<:Number}
 
+    @unpack tv, xv, xaux, x0, λ, λtsum, δx, dδx, jac, varsaux, QH, RH, aⱼ, qᵢ, vⱼ = cache
+
     # Allocation
     order = get_order(t)
     dof = length(q0)
@@ -316,39 +318,39 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
     sign_tstep = copysign(1, tmax-t0)
     t00 = t0
     tspan = zero(T)
-    @inbounds cache.tv[1] = t0
+    @inbounds tv[1] = t0
     @inbounds for ind in eachindex(q0)
-        cache.xv[ind,1] = q0[ind]
-        cache.λ[ind,1] = zero(U)
-        cache.λtsum[ind] = zero(U)
+        xv[ind,1] = q0[ind]
+        λ[ind,1] = zero(U)
+        λtsum[ind] = zero(U)
     end
 
     # Integration
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, cache.δx, cache.dδx, cache.jac, abstol, _δv,
-            cache.varsaux, params, rv, jacobianfunc!) # δt is positive!
+        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, δx, dδx, jac, abstol, _δv,
+            varsaux, params, rv, jacobianfunc!) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, cache.x0) # Update x0
+        evaluate!(x, δt, x0) # Update x0
         for ind in eachindex(jt)
-            @inbounds jt[ind] = cache.x0[dof+ind]
+            @inbounds jt[ind] = x0[dof+ind]
         end
-        modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
+        modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
         t0 += δt
         @inbounds t[0] = t0
         tspan = t0-t00
         nsteps += 1
-        @inbounds cache.tv[nsteps] = t0
+        @inbounds tv[nsteps] = t0
         @inbounds for ind in eachindex(q0)
-            cache.xv[ind,nsteps] = cache.x0[ind]
-            cache.λtsum[ind] += log(cache.RH[ind,ind])
-            cache.λ[ind,nsteps] = cache.λtsum[ind]/tspan
+            xv[ind,nsteps] = x0[ind]
+            λtsum[ind] += log(RH[ind,ind])
+            λ[ind,nsteps] = λtsum[ind]/tspan
         end
-        for ind in eachindex(cache.QH)
-            @inbounds cache.x0[dof+ind] = cache.QH[ind]
+        for ind in eachindex(QH)
+            @inbounds x0[dof+ind] = QH[ind]
         end
-        x .= Taylor1.( cache.x0, order )
+        x .= Taylor1.( x0, order )
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -357,7 +359,7 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
         end
     end
 
-    return build_lyap_solution(cache.tv, cache.xv, cache.λ, nsteps)
+    return build_lyap_solution(tv, xv, λ, nsteps)
 end
 
 
@@ -381,43 +383,13 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     x .= Taylor1.( x0, order )
     _dv = Array{TaylorN{Taylor1{U}}}(undef, dof)
 
-    # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
-    if isnothing(jacobianfunc!)
-        @assert get_numvars() == dof "`length(q0)` must be equal to number of variables set by `TaylorN`"
-        for ind in eachindex(q0)
-            _dv[ind] = one(x[1])*TaylorN(Taylor1{U}, ind, order=1)
-        end
-    end
-
-    # Determine if specialized jetcoeffs! method exists
-    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t,
-                    view(x, 1:dof), view(dx, 1:dof), params)
-
-    # Re-initialize the Taylor1 expansions
-    t = trange[1] + Taylor1( T, order )
-    x .= Taylor1.( x0, order )
-    tmpTaylor, arrTaylor = rv.v0, rv.v1
-    return _lyap_taylorinteg!(f!, t, x, dx, q0, trange, abstol, jt, _dv, rv,
-        params, jacobianfunc!; parse_eqs, maxsteps)
-
-end
-
-function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, jt::Matrix{U}, _δv::Array{TaylorN{Taylor1{U}},1},
-        rv::RetAlloc{Taylor1{U}}, params, jacobianfunc!; parse_eqs::Bool=true, # , cache::TaylorIntegrationLyapunovSpectrumTRangeCache
-        maxsteps::Int=500) where {T<:Real, U<:Number}
-
-    # Allocation
-    order = get_order(t)
     nn = length(trange)
-    dof = length(q0)
-    nx0 = length(x)
     cache = TaylorIntegrationLyapunovSpectrumTRangeCache(
         trange,
         Array{U}(undef, dof, nn),
         nothing,
         Array{Taylor1{U}}(undef, nx0),
-        similar(getcoeff.(x, 0)),
+        similar(x0),
         similar(q0),
         Array{U}(undef, dof, nn),
         similar(q0),
@@ -434,6 +406,38 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
     fill!(cache.xv, U(NaN))
     fill!(cache.λ, U(NaN))
 
+    # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
+    if isnothing(jacobianfunc!)
+        @assert get_numvars() == dof "`length(q0)` must be equal to number of variables set by `TaylorN`"
+        for ind in eachindex(q0)
+            _dv[ind] = one(x[1])*TaylorN(Taylor1{U}, ind, order=1)
+        end
+    end
+
+    # Determine if specialized jetcoeffs! method exists
+    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t,
+                    view(x, 1:dof), view(dx, 1:dof), params)
+
+    # Re-initialize the Taylor1 expansions
+    t = trange[1] + Taylor1( T, order )
+    x .= Taylor1.( x0, order )
+    tmpTaylor, arrTaylor = rv.v0, rv.v1
+    return _lyap_taylorinteg!(f!, t, x, dx, q0, trange, abstol, jt, _dv, rv, cache,
+        params, jacobianfunc!; parse_eqs, maxsteps)
+
+end
+
+function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
+        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, jt::Matrix{U}, _δv::Array{TaylorN{Taylor1{U}},1},
+        rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationLyapunovSpectrumTRangeCache, params, jacobianfunc!; parse_eqs::Bool=true,
+        maxsteps::Int=500) where {T<:Real, U<:Number}
+
+    @unpack xv, xaux, x0, q1, λ, λtsum, δx, dδx, jac, varsaux, QH, RH, aⱼ, qᵢ, vⱼ = cache
+
+    # Auxiliary variables
+    order = get_order(t)
+    dof = length(q0)
+
     # Initial conditions
     @inbounds t[0] = trange[1]
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
@@ -441,64 +445,64 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
     t00 = t0
     tspan = zero(T)
     @inbounds for ind in eachindex(q0)
-        cache.xv[ind,1] = q0[ind]
-        cache.λ[ind,1] = zero(U)
-        cache.λtsum[ind] = zero(U)
+        xv[ind,1] = q0[ind]
+        λ[ind,1] = zero(U)
+        λtsum[ind] = zero(U)
     end
 
     # Integration
     iter = 2
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, cache.δx, cache.dδx, cache.jac, abstol, _δv,
-            cache.varsaux, params, rv, jacobianfunc!) # δt is positive!
+        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, δx, dδx, jac, abstol, _δv,
+            varsaux, params, rv, jacobianfunc!) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, cache.x0) # Update x0
+        evaluate!(x, δt, x0) # Update x0
         tnext = t0+δt
         # Evaluate solution at times within convergence radius
         while t1 < tnext
-            evaluate!(x[1:dof], t1-t0, cache.x1)
-            @inbounds cache.xv[:,iter] .= cache.x1
+            evaluate!(x[1:dof], t1-t0, q1)
+            @inbounds xv[:,iter] .= q1
             for ind in eachindex(jt)
                 @inbounds jt[ind] = evaluate(x[dof+ind], δt)
             end
-            modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
+            modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
             tspan = t1-t00
             @inbounds for ind in eachindex(q0)
-                cache.λ[ind,iter] = (cache.λtsum[ind]+log(cache.RH[ind,ind]))/tspan
+                λ[ind,iter] = (λtsum[ind]+log(RH[ind,ind]))/tspan
             end
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds cache.xv[:,iter] .= cache.x0[1:dof]
+            @inbounds xv[:,iter] .= x0[1:dof]
             for ind in eachindex(jt)
-                @inbounds jt[ind] = cache.x0[dof+ind]
+                @inbounds jt[ind] = x0[dof+ind]
             end
-            modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
+            modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
             tspan = tmax-t00
             @inbounds for ind in eachindex(q0)
-                cache.λ[ind,iter] = (cache.λtsum[ind]+log(cache.RH[ind,ind]))/tspan
+                λ[ind,iter] = (λtsum[ind]+log(RH[ind,ind]))/tspan
             end
             break
         end
 
         for ind in eachindex(jt)
-            @inbounds jt[ind] = cache.x0[dof+ind]
+            @inbounds jt[ind] = x0[dof+ind]
         end
-        modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
+        modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
 
         t0 = tnext
         @inbounds t[0] = t0
         nsteps += 1
         @inbounds for ind in eachindex(q0)
-            cache.λtsum[ind] += log(cache.RH[ind,ind])
+            λtsum[ind] += log(RH[ind,ind])
         end
-        for ind in eachindex(cache.QH)
-            @inbounds cache.x0[dof+ind] = cache.QH[ind]
+        for ind in eachindex(QH)
+            @inbounds x0[dof+ind] = QH[ind]
         end
-        x .= Taylor1.( cache.x0, order )
+        x .= Taylor1.( x0, order )
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -507,5 +511,5 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
         end
     end
 
-    return build_lyap_solution(trange, cache.xv, cache.λ)
+    return build_lyap_solution(trange, xv, λ)
 end

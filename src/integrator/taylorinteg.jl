@@ -83,11 +83,13 @@ function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
         x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationScalarCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
+    @unpack tv, xv, psol = cache
+
     # Initial conditions
     nsteps = 1
     @inbounds t[0] = t0
-    @inbounds cache.tv[1] = t0
-    @inbounds cache.xv[1] = x0
+    @inbounds tv[1] = t0
+    @inbounds xv[1] = x0
     sign_tstep = copysign(1, tmax-t0)
 
     # Integration
@@ -96,13 +98,13 @@ function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         x0 = evaluate(x, δt) # new initial condition
-        set_psol!(dense, cache.psol, nsteps, x) # Store the Taylor polynomial solution
+        set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
         @inbounds x[0] = x0
         t0 += δt
         @inbounds t[0] = t0
         nsteps += 1
-        @inbounds cache.tv[nsteps] = t0
-        @inbounds cache.xv[nsteps] = x0
+        @inbounds tv[nsteps] = t0
+        @inbounds xv[nsteps] = x0
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -111,7 +113,7 @@ function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
         end
     end
 
-    return build_solution(cache.tv, cache.xv, cache.psol, nsteps)
+    return build_solution(tv, xv, psol, nsteps)
 end
 
 
@@ -150,21 +152,23 @@ function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1},
         q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
+    @unpack tv, xv, psol, xaux = cache
+
     # Initial conditions
     @inbounds t[0] = t0
     x0 = deepcopy(q0)
-    @inbounds cache.tv[1] = t0
-    @inbounds cache.xv[:,1] .= q0
+    @inbounds tv[1] = t0
+    @inbounds xv[:,1] .= q0
     sign_tstep = copysign(1, tmax-t0)
 
     # Integration
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, abstol, params, rv) # δt is positive!
+        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, abstol, params, rv) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         evaluate!(x, δt, x0) # new initial condition
-        set_psol!(dense, cache.psol, nsteps, x) # Store the Taylor polynomial solution
+        set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
         @inbounds for i in eachindex(x0)
             x[i][0] = x0[i]
             TaylorSeries.zero!(dx[i], 0)
@@ -172,8 +176,8 @@ function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1},
         t0 += δt
         @inbounds t[0] = t0
         nsteps += 1
-        @inbounds cache.tv[nsteps] = t0
-        @inbounds cache.xv[:,nsteps] .= deepcopy.(x0)
+        @inbounds tv[nsteps] = t0
+        @inbounds xv[:,nsteps] .= deepcopy.(x0)
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -182,7 +186,7 @@ function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1},
         end
     end
 
-    return build_solution(cache.tv, cache.xv, cache.psol, nsteps)
+    return build_solution(tv, xv, psol, nsteps)
 end
 
 @doc doc"""
@@ -309,11 +313,13 @@ end
 function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractVector{T},
         abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationScalarCache, params; parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
+    @unpack xv = cache
+
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
     @inbounds t[0] = t0
-    @inbounds cache.xv[1] = x0
+    @inbounds xv[1] = x0
 
     # Integration
     iter = 2
@@ -327,12 +333,12 @@ function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractV
         # Evaluate solution at times within convergence radius
         while sign_tstep*t1 < sign_tstep*tnext
             x1 = evaluate(x, t1-t0)
-            @inbounds cache.xv[iter] = x1
+            @inbounds xv[iter] = x1
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds cache.xv[iter] = x0
+            @inbounds xv[iter] = x0
             break
         end
         @inbounds x[0] = x0
@@ -346,7 +352,7 @@ function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractV
             break
         end
     end
-    return build_solution(trange, cache.xv)
+    return build_solution(trange, xv)
 end
 
 function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
@@ -396,37 +402,39 @@ function _taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Tayl
         q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
+    @unpack xv, xaux, x0, x1 = cache
+
     # Initial conditions
     @inbounds t[0] = trange[1]
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
     # x .= Taylor1.(q0, order)
-    @inbounds cache.x0 .= deepcopy(q0)
-    @inbounds cache.xv[:,1] .= q0
+    @inbounds x0 .= deepcopy(q0)
+    @inbounds xv[:,1] .= q0
 
     # Integration
     iter = 2
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, abstol, params, rv) # δt is positive!
+        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, abstol, params, rv) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, cache.x0) # new initial condition
+        evaluate!(x, δt, x0) # new initial condition
         tnext = t0+δt
         # Evaluate solution at times within convergence radius
         while sign_tstep*t1 < sign_tstep*tnext
-            evaluate!(x, t1-t0, cache.x1)
-            @inbounds cache.xv[:,iter] .= cache.x1
+            evaluate!(x, t1-t0, x1)
+            @inbounds xv[:,iter] .= x1
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds cache.xv[:,iter] .= cache.x0
+            @inbounds xv[:,iter] .= x0
             break
         end
-        @inbounds for i in eachindex(cache.x0)
-            x[i][0] = cache.x0[i]
-            dx[i][0] = zero(cache.x0[i])
+        @inbounds for i in eachindex(x0)
+            x[i][0] = x0[i]
+            dx[i][0] = zero(x0[i])
         end
         t0 = tnext
         @inbounds t[0] = t0
@@ -439,7 +447,7 @@ function _taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Tayl
         end
     end
 
-    return build_solution(trange, cache.xv)
+    return build_solution(trange, xv)
 end
 
 

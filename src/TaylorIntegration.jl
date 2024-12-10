@@ -7,6 +7,7 @@ using Reexport
 using LinearAlgebra
 using Markdown
 using InteractiveUtils #: methodswith
+using Parameters
 if !isdefined(Base, :get_extension)
     using Requires
 end
