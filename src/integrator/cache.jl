@@ -66,10 +66,6 @@ struct TaylorIntegrationLyapunovSpectrumCache{TV, XV, PSOL, XAUX, X0, Λ, ΛTSUM
     vⱼ::VJ
 end
 
-x0(c::TaylorIntegrationLyapunovSpectrumCache) = c.x0
-λ(c::TaylorIntegrationLyapunovSpectrumCache) = c.λ
-λtsum(c::TaylorIntegrationLyapunovSpectrumCache) = c.λtsum
-
 # TaylorIntegrationLyapunovSpectrumTRangeCache
 
 struct TaylorIntegrationLyapunovSpectrumTRangeCache{TV, XV, PSOL, XAUX, X0, X1, Λ, ΛTSUM, ΔX, DΔX, JAC, VARSAUX, QQH, RRH, AJ, QI, VJ} <: AbstractTaylorIntegrationVectorCache
@@ -91,8 +87,3 @@ struct TaylorIntegrationLyapunovSpectrumTRangeCache{TV, XV, PSOL, XAUX, X0, X1, 
     qᵢ::QI
     vⱼ::VJ
 end
-
-x0(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.x0
-x1(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.x1
-λ(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.λ
-λtsum(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.λtsum
