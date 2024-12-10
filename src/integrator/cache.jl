@@ -3,6 +3,7 @@
 # AbstractTaylorIntegrationCache interface
 
 abstract type AbstractTaylorIntegrationCache end
+
 tv(c::AbstractTaylorIntegrationCache) = c.tv
 xv(c::AbstractTaylorIntegrationCache) = c.xv
 psol(c::AbstractTaylorIntegrationCache) = c.psol
@@ -10,6 +11,7 @@ psol(c::AbstractTaylorIntegrationCache) = c.psol
 # AbstractTaylorIntegrationVectorCache interface
 
 abstract type AbstractTaylorIntegrationVectorCache <: AbstractTaylorIntegrationCache end
+
 xaux(c::AbstractTaylorIntegrationVectorCache) = c.xaux
 
 # AbstractTaylorIntegrationCache
@@ -29,7 +31,7 @@ struct TaylorIntegrationVectorCache{TV, XV, PSOL, XAUX} <: AbstractTaylorIntegra
     xaux::XAUX
 end
 
-# AbstractTaylorIntegrationVectorCache
+# TaylorIntegrationVectorTRangeCache
 
 struct TaylorIntegrationVectorTRangeCache{TV, XV, PSOL, XAUX, X0, X1} <: AbstractTaylorIntegrationVectorCache
     tv::TV
@@ -39,5 +41,58 @@ struct TaylorIntegrationVectorTRangeCache{TV, XV, PSOL, XAUX, X0, X1} <: Abstrac
     x0::X0
     x1::X1
 end
+
 x0(c::TaylorIntegrationVectorTRangeCache) = c.x0
 x1(c::TaylorIntegrationVectorTRangeCache) = c.x1
+
+# TaylorIntegrationLyapunovSpectrumCache
+
+struct TaylorIntegrationLyapunovSpectrumCache{TV, XV, PSOL, XAUX, X0, Λ, ΛTSUM, ΔX, DΔX, JAC, VARSAUX, QQH, RRH, AJ, QI, VJ} <: AbstractTaylorIntegrationVectorCache
+    tv::TV
+    xv::XV
+    psol::PSOL
+    xaux::XAUX
+    x0::X0
+    λ::Λ
+    λtsum::ΛTSUM
+    δx::ΔX
+    dδx::DΔX
+    jac::JAC
+    varsaux::VARSAUX
+    QH::QQH
+    RH::RRH
+    aⱼ::AJ
+    qᵢ::QI
+    vⱼ::VJ
+end
+
+x0(c::TaylorIntegrationLyapunovSpectrumCache) = c.x0
+λ(c::TaylorIntegrationLyapunovSpectrumCache) = c.λ
+λtsum(c::TaylorIntegrationLyapunovSpectrumCache) = c.λtsum
+
+# TaylorIntegrationLyapunovSpectrumTRangeCache
+
+struct TaylorIntegrationLyapunovSpectrumTRangeCache{TV, XV, PSOL, XAUX, X0, X1, Λ, ΛTSUM, ΔX, DΔX, JAC, VARSAUX, QQH, RRH, AJ, QI, VJ} <: AbstractTaylorIntegrationVectorCache
+    tv::TV
+    xv::XV
+    psol::PSOL
+    xaux::XAUX
+    x0::X0
+    x1::X1
+    λ::Λ
+    λtsum::ΛTSUM
+    δx::ΔX
+    dδx::DΔX
+    jac::JAC
+    varsaux::VARSAUX
+    QH::QQH
+    RH::RRH
+    aⱼ::AJ
+    qᵢ::QI
+    vⱼ::VJ
+end
+
+x0(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.x0
+x1(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.x1
+λ(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.λ
+λtsum(c::TaylorIntegrationLyapunovSpectrumTRangeCache) = c.λtsum

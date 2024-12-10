@@ -261,8 +261,27 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T,
     x = Array{Taylor1{U}}(undef, nx0)
     dx = Array{Taylor1{U}}(undef, nx0)
     x .= Taylor1.( x0, order )
-    # dx .= zero.(x)
     _dv = Array{TaylorN{Taylor1{U}}}(undef, dof)
+
+    cache = TaylorIntegrationLyapunovSpectrumCache(
+        Array{T}(undef, maxsteps+1),
+        Array{U}(undef, dof, maxsteps+1),
+        nothing,
+        Array{Taylor1{U}}(undef, nx0),
+        getcoeff.(x, 0),
+        Array{U}(undef, dof, maxsteps+1),
+        similar(q0),
+        Array{TaylorN{Taylor1{U}}}(undef, dof),
+        Array{TaylorN{Taylor1{U}}}(undef, dof),
+        Array{Taylor1{U}}(undef, dof, dof),
+        Array{Taylor1{U}}(undef, dof, dof, dof),
+        Array{U}(undef, dof, dof),
+        Array{U}(undef, dof, dof),
+        Array{U}(undef, dof ),
+        Array{U}(undef, dof ),
+        Array{U}(undef, dof )
+    )
+    fill!(cache.jac, zero(x[1]))
 
     # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
     if isa(jacobianfunc!, Nothing)
@@ -280,75 +299,56 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T,
     t = t0 + Taylor1( T, order )
     x .= Taylor1.( x0, order )
     return _lyap_taylorinteg!(f!, t, x, dx, q0, t0, tmax, abstol, jt, _dv, rv,
-        params, jacobianfunc!; maxsteps, parse_eqs)
+        cache, params, jacobianfunc!; maxsteps, parse_eqs)
 end
 
 function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
         q0::Array{U,1}, t0::T, tmax::T, abstol::T, jt::Matrix{U}, _δv::Array{TaylorN{Taylor1{U}},1},
-        rv::RetAlloc{Taylor1{U}}, params, jacobianfunc!; parse_eqs::Bool=true,
+        rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationLyapunovSpectrumCache, params, jacobianfunc!; parse_eqs::Bool=true,
         maxsteps::Int=500) where {T<:Real, U<:Number}
 
     # Allocation
     order = get_order(t)
-    tv = Array{T}(undef, maxsteps+1)
     dof = length(q0)
-    x0 = getcoeff.(x, 0)
-    xv = Array{U}(undef, dof, maxsteps+1)
-    λ = similar(xv)
-    λtsum = similar(q0)
 
     # Initial conditions
     @inbounds t[0] = t0
     sign_tstep = copysign(1, tmax-t0)
     t00 = t0
     tspan = zero(T)
-    @inbounds tv[1] = t0
+    @inbounds cache.tv[1] = t0
     @inbounds for ind in eachindex(q0)
-        xv[ind,1] = q0[ind]
-        λ[ind,1] = zero(U)
-        λtsum[ind] = zero(U)
+        cache.xv[ind,1] = q0[ind]
+        cache.λ[ind,1] = zero(U)
+        cache.λtsum[ind] = zero(U)
     end
-
-    #Allocate auxiliary arrays
-    nx0 = length(x0)
-    xaux = Array{Taylor1{U}}(undef, nx0)
-    δx = Array{TaylorN{Taylor1{U}}}(undef, dof)
-    dδx = Array{TaylorN{Taylor1{U}}}(undef, dof)
-    jac = Array{Taylor1{U}}(undef, dof, dof)
-    varsaux = Array{Taylor1{U}}(undef, dof, dof, dof)
-    fill!(jac, zero(x[1]))
-    QH = Array{U}(undef, dof, dof)
-    RH = Array{U}(undef, dof, dof)
-    aⱼ = Array{U}(undef, dof )
-    qᵢ = similar(aⱼ)
-    vⱼ = similar(aⱼ)
 
     # Integration
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, δx, dδx, jac, abstol, _δv,
-            varsaux, params, rv, jacobianfunc!) # δt is positive!
+        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, cache.δx, cache.dδx, cache.jac, abstol, _δv,
+            cache.varsaux, params, rv, jacobianfunc!) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, x0) # Update x0
+        evaluate!(x, δt, cache.x0) # Update x0
         for ind in eachindex(jt)
-            @inbounds jt[ind] = x0[dof+ind]
+            @inbounds jt[ind] = cache.x0[dof+ind]
         end
-        modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
+        modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
         t0 += δt
         @inbounds t[0] = t0
         tspan = t0-t00
         nsteps += 1
-        @inbounds tv[nsteps] = t0
+        @inbounds cache.tv[nsteps] = t0
         @inbounds for ind in eachindex(q0)
-            xv[ind,nsteps] = x0[ind]
-            λtsum[ind] += log(RH[ind,ind])
-            λ[ind,nsteps] = λtsum[ind]/tspan
+            cache.xv[ind,nsteps] = cache.x0[ind]
+            cache.λtsum[ind] += log(cache.RH[ind,ind])
+            cache.λ[ind,nsteps] = cache.λtsum[ind]/tspan
         end
-        for ind in eachindex(QH)
-            @inbounds x0[dof+ind] = QH[ind]
+        for ind in eachindex(cache.QH)
+            @inbounds cache.x0[dof+ind] = cache.QH[ind]
         end
-        x .= Taylor1.( x0, order )
+        x .= Taylor1.( cache.x0, order )
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -357,7 +357,7 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
         end
     end
 
-    return build_lyap_solution(tv, xv, λ, nsteps)
+    return build_lyap_solution(cache.tv, cache.xv, cache.λ, nsteps)
 end
 
 
@@ -404,20 +404,35 @@ end
 
 function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
         q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, jt::Matrix{U}, _δv::Array{TaylorN{Taylor1{U}},1},
-        rv::RetAlloc{Taylor1{U}}, params, jacobianfunc!; parse_eqs::Bool=true,
+        rv::RetAlloc{Taylor1{U}}, params, jacobianfunc!; parse_eqs::Bool=true, # , cache::TaylorIntegrationLyapunovSpectrumTRangeCache
         maxsteps::Int=500) where {T<:Real, U<:Number}
 
     # Allocation
     order = get_order(t)
     nn = length(trange)
     dof = length(q0)
-    x0 = getcoeff.(x, 0)
-    xv = Array{U}(undef, dof, nn)
-    fill!(xv, U(NaN))
-    λ = Array{U}(undef, dof, nn)
-    fill!(λ, U(NaN))
-    λtsum = similar(q0)
-    q1 = similar(q0)
+    nx0 = length(x)
+    cache = TaylorIntegrationLyapunovSpectrumTRangeCache(
+        trange,
+        Array{U}(undef, dof, nn),
+        nothing,
+        Array{Taylor1{U}}(undef, nx0),
+        similar(getcoeff.(x, 0)),
+        similar(q0),
+        Array{U}(undef, dof, nn),
+        similar(q0),
+        Array{TaylorN{Taylor1{U}}}(undef, dof),
+        Array{TaylorN{Taylor1{U}}}(undef, dof),
+        Array{Taylor1{U}}(undef, dof, dof),
+        Array{Taylor1{U}}(undef, dof, dof, dof),
+        Array{U}(undef, dof, dof),
+        Array{U}(undef, dof, dof),
+        Array{U}(undef, dof ),
+        Array{U}(undef, dof ),
+        Array{U}(undef, dof )
+    )
+    fill!(cache.xv, U(NaN))
+    fill!(cache.λ, U(NaN))
 
     # Initial conditions
     @inbounds t[0] = trange[1]
@@ -426,78 +441,64 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
     t00 = t0
     tspan = zero(T)
     @inbounds for ind in eachindex(q0)
-        xv[ind,1] = q0[ind]
-        λ[ind,1] = zero(U)
-        λtsum[ind] = zero(U)
+        cache.xv[ind,1] = q0[ind]
+        cache.λ[ind,1] = zero(U)
+        cache.λtsum[ind] = zero(U)
     end
-
-    #Allocate auxiliary arrays
-    nx0 = length(x0)
-    xaux = Array{Taylor1{U}}(undef, nx0)
-    δx = Array{TaylorN{Taylor1{U}}}(undef, dof)
-    dδx = Array{TaylorN{Taylor1{U}}}(undef, dof)
-    jac = Array{Taylor1{U}}(undef, dof, dof)
-    varsaux = Array{Taylor1{U}}(undef, dof, dof, dof)
-    fill!(jac, zero(x[1]))
-    QH = Array{U}(undef, dof, dof)
-    RH = Array{U}(undef, dof, dof)
-    aⱼ = Array{U}(undef, dof )
-    qᵢ = similar(aⱼ)
-    vⱼ = similar(aⱼ)
 
     # Integration
     iter = 2
     nsteps = 1
     while sign_tstep*t0 < sign_tstep*tmax
-        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, δx, dδx, jac, abstol, _δv,
-            varsaux, params, rv, jacobianfunc!) # δt is positive!
+        δt = lyap_taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, cache.δx, cache.dδx, cache.jac, abstol, _δv,
+            cache.varsaux, params, rv, jacobianfunc!) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
-        evaluate!(x, δt, x0) # Update x0
+        evaluate!(x, δt, cache.x0) # Update x0
         tnext = t0+δt
         # Evaluate solution at times within convergence radius
         while t1 < tnext
-            evaluate!(x[1:dof], t1-t0, q1)
-            @inbounds xv[:,iter] .= q1
+            evaluate!(x[1:dof], t1-t0, cache.x1)
+            @inbounds cache.xv[:,iter] .= cache.x1
             for ind in eachindex(jt)
                 @inbounds jt[ind] = evaluate(x[dof+ind], δt)
             end
-            modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
+            modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
             tspan = t1-t00
             @inbounds for ind in eachindex(q0)
-                λ[ind,iter] = (λtsum[ind]+log(RH[ind,ind]))/tspan
+                cache.λ[ind,iter] = (cache.λtsum[ind]+log(cache.RH[ind,ind]))/tspan
             end
             iter += 1
             @inbounds t1 = trange[iter]
         end
         if δt == tmax-t0
-            @inbounds xv[:,iter] .= x0[1:dof]
+            @inbounds cache.xv[:,iter] .= cache.x0[1:dof]
             for ind in eachindex(jt)
-                @inbounds jt[ind] = x0[dof+ind]
+                @inbounds jt[ind] = cache.x0[dof+ind]
             end
-            modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
+            modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
             tspan = tmax-t00
             @inbounds for ind in eachindex(q0)
-                λ[ind,iter] = (λtsum[ind]+log(RH[ind,ind]))/tspan
+                cache.λ[ind,iter] = (cache.λtsum[ind]+log(cache.RH[ind,ind]))/tspan
             end
             break
         end
 
         for ind in eachindex(jt)
-            @inbounds jt[ind] = x0[dof+ind]
+            @inbounds jt[ind] = cache.x0[dof+ind]
         end
-        modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
+        modifiedGS!( jt, cache.QH, cache.RH, cache.aⱼ, cache.qᵢ, cache.vⱼ )
 
         t0 = tnext
         @inbounds t[0] = t0
         nsteps += 1
         @inbounds for ind in eachindex(q0)
-            λtsum[ind] += log(RH[ind,ind])
+            cache.λtsum[ind] += log(cache.RH[ind,ind])
         end
-        for ind in eachindex(QH)
-            @inbounds x0[dof+ind] = QH[ind]
+        for ind in eachindex(cache.QH)
+            @inbounds cache.x0[dof+ind] = cache.QH[ind]
         end
-        x .= Taylor1.( x0, order )
+        x .= Taylor1.( cache.x0, order )
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -506,5 +507,5 @@ function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array
         end
     end
 
-    return build_lyap_solution(trange, xv, λ)
+    return build_lyap_solution(trange, cache.xv, cache.λ)
 end
