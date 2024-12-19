@@ -1345,14 +1345,9 @@ import Logging: Warn
             _t = _t0 + Taylor1( _T, _order )
             _x .= Taylor1.( _q0, _order )
             _dx .= Taylor1.( zero.(_q0), _order)
-            # Allocation of output
-            _tv = Array{typeof(_t0)}(undef, _maxsteps + 1)
-            _xv = Array{eltype(_q0)}(undef, _dof, _maxsteps + 1)
-            _psol_true = TaylorIntegration.init_psol(Val(true), _maxsteps, _dof, _x)
-            _psol_false = TaylorIntegration.init_psol(Val(false), _maxsteps, _dof, _x)
-            _xaux = Array{eltype(_x)}(undef, _dof)
-            _cache_true = TaylorIntegration.TaylorIntegrationVectorCache(_tv, _xv, _psol_true, _xaux)
-            _cache_false = TaylorIntegration.TaylorIntegrationVectorCache(_tv, _xv, _psol_false, _xaux)
+            # Allocation
+            _cache_true = TaylorIntegration.init_cache(TaylorIntegration.VectorCache, Val(true), _t0, _x, _maxsteps)
+            _cache_false = TaylorIntegration.init_cache(TaylorIntegration.VectorCache, Val(false), _t0, _x, _maxsteps)
             solTN = @inferred TaylorIntegration._taylorinteg!(Val(true), kepler1!, _t, _x, _dx, _q0, _t0, _tmax, _abstol, __rv, _cache_true, _params; parse_eqs=__parse_eqs, maxsteps=_maxsteps)
             solTN2 = @inferred TaylorIntegration._taylorinteg!(Val(false), kepler1!, _t, _x, _dx, _q0, _t0, _tmax, _abstol, __rv, _cache_false, _params; parse_eqs=__parse_eqs, maxsteps=_maxsteps)
             @test solTN isa TaylorSolution{typeof(_t0), eltype(_q0), ndims(solTN.x), typeof(solTN.t), typeof(solTN.x), typeof(solTN.p), Nothing, Nothing, Nothing}

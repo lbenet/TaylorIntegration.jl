@@ -263,25 +263,8 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T,
     x .= Taylor1.( x0, order )
     _dv = Array{TaylorN{Taylor1{U}}}(undef, dof)
 
-    cache = TaylorIntegrationLyapunovSpectrumCache(
-        Array{T}(undef, maxsteps+1),
-        Array{U}(undef, dof, maxsteps+1),
-        nothing,
-        Array{Taylor1{U}}(undef, nx0),
-        getcoeff.(x, 0),
-        Array{U}(undef, dof, maxsteps+1),
-        similar(q0),
-        Array{TaylorN{Taylor1{U}}}(undef, dof),
-        Array{TaylorN{Taylor1{U}}}(undef, dof),
-        Array{Taylor1{U}}(undef, dof, dof),
-        Array{Taylor1{U}}(undef, dof, dof, dof),
-        Array{U}(undef, dof, dof),
-        Array{U}(undef, dof, dof),
-        Array{U}(undef, dof ),
-        Array{U}(undef, dof ),
-        Array{U}(undef, dof )
-    )
-    fill!(cache.jac, zero(x[1]))
+    # Allocation
+    cache = init_cache(LyapunovSpectrumCache, Val(false), t0, x, maxsteps)
 
     # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
     if isa(jacobianfunc!, Nothing)
@@ -304,7 +287,7 @@ end
 
 function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
         q0::Array{U,1}, t0::T, tmax::T, abstol::T, jt::Matrix{U}, _δv::Array{TaylorN{Taylor1{U}},1},
-        rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationLyapunovSpectrumCache, params, jacobianfunc!; parse_eqs::Bool=true,
+        rv::RetAlloc{Taylor1{U}}, cache::LyapunovSpectrumCache, params, jacobianfunc!; parse_eqs::Bool=true,
         maxsteps::Int=500) where {T<:Real, U<:Number}
 
     @unpack tv, xv, xaux, x0, λ, λtsum, δx, dδx, jac, varsaux, QH, RH, aⱼ, qᵢ, vⱼ = cache
@@ -383,28 +366,8 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     x .= Taylor1.( x0, order )
     _dv = Array{TaylorN{Taylor1{U}}}(undef, dof)
 
-    nn = length(trange)
-    cache = TaylorIntegrationLyapunovSpectrumTRangeCache(
-        trange,
-        Array{U}(undef, dof, nn),
-        nothing,
-        Array{Taylor1{U}}(undef, nx0),
-        similar(x0),
-        similar(q0),
-        Array{U}(undef, dof, nn),
-        similar(q0),
-        Array{TaylorN{Taylor1{U}}}(undef, dof),
-        Array{TaylorN{Taylor1{U}}}(undef, dof),
-        Array{Taylor1{U}}(undef, dof, dof),
-        Array{Taylor1{U}}(undef, dof, dof, dof),
-        Array{U}(undef, dof, dof),
-        Array{U}(undef, dof, dof),
-        Array{U}(undef, dof ),
-        Array{U}(undef, dof ),
-        Array{U}(undef, dof )
-    )
-    fill!(cache.xv, U(NaN))
-    fill!(cache.λ, U(NaN))
+    # Allocation
+    cache = init_cache(LyapunovSpectrumTRangeCache, Val(false), trange, x, maxsteps)
 
     # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
     if isnothing(jacobianfunc!)
@@ -429,7 +392,7 @@ end
 
 function _lyap_taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
         q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, jt::Matrix{U}, _δv::Array{TaylorN{Taylor1{U}},1},
-        rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationLyapunovSpectrumTRangeCache, params, jacobianfunc!; parse_eqs::Bool=true,
+        rv::RetAlloc{Taylor1{U}}, cache::LyapunovSpectrumTRangeCache, params, jacobianfunc!; parse_eqs::Bool=true,
         maxsteps::Int=500) where {T<:Real, U<:Number}
 
     @unpack xv, xaux, x0, q1, λ, λtsum, δx, dδx, jac, varsaux, QH, RH, aⱼ, qᵢ, vⱼ = cache

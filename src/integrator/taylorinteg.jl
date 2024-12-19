@@ -25,10 +25,10 @@ end
 
 # init_psol
 @doc doc"""
-    init_psol(::Val{true}, xv::Array{U,1}, x::Taylor1{U}) where {U<:Number}
-    init_psol(::Val{true}, xv::Array{U,2}, x::Array{Taylor1{U},1}) where {U<:Number}
-    init_psol(::Val{false}, ::Array{U,1}, ::Taylor1{U}) where {U<:Number}
-    init_psol(::Val{false}, ::Array{U,2}, ::Array{Taylor1{U},1}) where {U<:Number}
+    init_psol(::Val{true}, maxsteps::Int, ::Int, ::Taylor1{U}) where {U<:Number}
+    init_psol(::Val{true}, maxsteps::Int, dof::Int, ::Array{Taylor1{U},1}) where {U<:Number}
+    init_psol(::Val{false}, ::Int, ::Int, ::Taylor1{U}) where {U<:Number}
+    init_psol(::Val{false}, ::Int, ::Int, ::Array{Taylor1{U},1}) where {U<:Number}
 
 Auxiliary function to initialize `psol` during a call to [`taylorinteg`](@ref). When the
 first argument in the call signature is `Val(false)` this function simply returns `nothing`.
@@ -37,13 +37,6 @@ appropriate array is allocated and returned; this array is where the Taylor poly
 associated to the solution will be stored, corresponding to field `:p` in
 [`TaylorSolution`](@ref).
 """
-@inline function init_psol(::Val{true}, xv::Array{U,1}, ::Taylor1{U}) where {U<:Number}
-    return Array{Taylor1{U}}(undef, size(xv, 1)-1)
-end
-@inline function init_psol(::Val{true}, xv::Array{U,2}, ::Array{Taylor1{U},1}) where {U<:Number}
-    return Array{Taylor1{U}}(undef, size(xv, 1), size(xv, 2)-1)
-end
-
 @inline function init_psol(::Val{true}, maxsteps::Int, ::Int, ::Taylor1{U}) where {U<:Number}
     return Array{Taylor1{U}}(undef, maxsteps)
 end
@@ -51,8 +44,6 @@ end
     return Array{Taylor1{U}}(undef, dof, maxsteps)
 end
 
-@inline init_psol(::Val{false}, ::Array{U,1}, ::Taylor1{U}) where {U<:Number} = nothing
-@inline init_psol(::Val{false}, ::Array{U,2}, ::Array{Taylor1{U},1}) where {U<:Number} = nothing
 @inline init_psol(::Val{false}, ::Int, ::Int, ::Taylor1{U}) where {U<:Number} = nothing
 @inline init_psol(::Val{false}, ::Int, ::Int, ::Array{Taylor1{U},1}) where {U<:Number} = nothing
 
@@ -65,10 +56,7 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     x = Taylor1( x0, order )
 
     # Allocation
-    cache = TaylorIntegrationScalarCache(
-        Array{T}(undef, maxsteps + 1),
-        Array{U}(undef, maxsteps + 1),
-        init_psol(Val(dense), maxsteps, 1, x))
+    cache = init_cache(ScalarCache, Val(dense), t0, x, maxsteps)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
@@ -80,7 +68,7 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
 end
 
 function _taylorinteg!(dense::Val{D}, f, t::Taylor1{T}, x::Taylor1{U},
-        x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationScalarCache, params;
+        x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::ScalarCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
     @unpack tv, xv, psol = cache
@@ -131,11 +119,7 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
     end
 
     # Allocation
-    cache = TaylorIntegrationVectorCache(
-        Array{T}(undef, maxsteps + 1),
-        Array{U}(undef, dof, maxsteps + 1),
-        init_psol(Val(dense), maxsteps, dof, x),
-        Array{Taylor1{U}}(undef, dof))
+    cache = init_cache(VectorCache, Val(dense), t0, x, maxsteps)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
@@ -149,7 +133,7 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
 end
 
 function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorCache, params;
+        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
     @unpack tv, xv, psol, xaux = cache
@@ -295,11 +279,7 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
 
     # Allocation
     nn = length(trange)
-    cache = TaylorIntegrationScalarCache(
-        trange,
-        Array{U}(undef, nn),
-        init_psol(Val(false), maxsteps, 1, x))
-    fill!(cache.xv, T(NaN))
+    cache = init_cache(ScalarCache, Val(false), trange, x, maxsteps)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
@@ -311,7 +291,7 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
 end
 
 function _taylorinteg!(f, t::Taylor1{T}, x::Taylor1{U}, x0::U, trange::AbstractVector{T},
-        abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationScalarCache, params; parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
+        abstol::T, rv::RetAlloc{Taylor1{U}}, cache::ScalarCache, params; parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
     @unpack xv = cache
 
@@ -373,19 +353,7 @@ function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     dx .= Taylor1.( zero.(q0), order )
 
     # Allocation
-    nn = length(trange)
-    dof = length(q0)
-    cache = TaylorIntegrationVectorTRangeCache(
-        trange,
-        Array{U}(undef, dof, nn),
-        init_psol(Val(false), maxsteps, dof, x),
-        Array{Taylor1{U}}(undef, dof),
-        similar(q0),
-        similar(q0))
-    fill!(cache.x0, T(NaN))
-    for ind in 1:nn
-        @inbounds cache.xv[:,ind] .= cache.x0
-    end
+    cache = init_cache(VectorTRangeCache, Val(false), trange, x, maxsteps)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
@@ -399,7 +367,7 @@ function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
 end
 
 function _taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorTRangeCache, params;
+        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
     @unpack xv, xaux, x0, x1 = cache

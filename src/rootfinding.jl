@@ -223,7 +223,7 @@ function taylorinteg(f!, g, q0::Array{U,1}, t0::T, tmax::T,
     end
 
     # Allocation
-    cache = TaylorIntegrationVectorCache(
+    cache = VectorCache(
         Array{T}(undef, maxsteps + 1),
         Array{U}(undef, dof, maxsteps + 1),
         init_psol(Val(dense), maxsteps, dof, x),
@@ -240,7 +240,7 @@ function taylorinteg(f!, g, q0::Array{U,1}, t0::T, tmax::T,
 end
 
 function _taylorinteg!(dense::Val{D}, f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorCache, params;
+        q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500, eventorder::Int=0,
         newtoniter::Int=10, nrabstol::T=eps(T)) where {T <: Real,U <: Number, D}
 
@@ -330,7 +330,7 @@ function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
     # Allocation
     nn = length(trange)
     dof = length(q0)
-    cache = TaylorIntegrationVectorTRangeCache(
+    cache = VectorTRangeCache(
         trange,
         Array{U}(undef, dof, nn),
         init_psol(Val(false), maxsteps, dof, x),
@@ -353,7 +353,7 @@ function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
 end
 
 function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::TaylorIntegrationVectorTRangeCache, params;
+        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500, eventorder::Int=0, newtoniter::Int=10, nrabstol::T=eps(T)) where {T <: Real,U <: Number}
 
     @unpack tv, xv, xaux, x0, x1 = cache
