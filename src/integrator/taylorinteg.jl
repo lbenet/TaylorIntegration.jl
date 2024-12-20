@@ -61,9 +61,6 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
 
-    # Re-initialize the Taylor1 expansions
-    # t = t0 + Taylor1( T, order )
-    # x = Taylor1( x0, order )
     return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
