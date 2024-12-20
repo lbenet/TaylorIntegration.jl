@@ -62,8 +62,8 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
 
     # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x = Taylor1( x0, order )
+    # t = t0 + Taylor1( T, order )
+    # x = Taylor1( x0, order )
     return _taylorinteg!(Val(dense), f, t, x, x0, t0, tmax, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
@@ -124,10 +124,6 @@ function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
 
-    # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x .= Taylor1.( q0, order )
-    dx .= Taylor1.( zero.(q0), order)
     return _taylorinteg!(Val(dense), f!, t, x, dx, q0, t0, tmax, abstol, rv,
         cache, params; parse_eqs, maxsteps)
 end
@@ -284,9 +280,6 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, t, x, params)
 
-    # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x = Taylor1( x0, order )
     return _taylorinteg!(f, t, x, x0, trange, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
@@ -358,10 +351,6 @@ function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
 
-    # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x .= Taylor1.( q0, order )
-    dx .= Taylor1.( zero.(q0), order )
     return _taylorinteg!(f!, t, x, dx, q0, trange, abstol, rv,
         cache, params; parse_eqs, maxsteps)
 end

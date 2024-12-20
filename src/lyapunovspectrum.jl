@@ -278,9 +278,6 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T,
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t,
                     view(x, 1:dof), view(dx, 1:dof), params)
 
-    # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x .= Taylor1.( x0, order )
     return _lyap_taylorinteg!(f!, t, x, dx, q0, t0, tmax, abstol, jt, _dv, rv,
         cache, params, jacobianfunc!; maxsteps, parse_eqs)
 end
@@ -381,10 +378,6 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t,
                     view(x, 1:dof), view(dx, 1:dof), params)
 
-    # Re-initialize the Taylor1 expansions
-    t = trange[1] + Taylor1( T, order )
-    x .= Taylor1.( x0, order )
-    tmpTaylor, arrTaylor = rv.v0, rv.v1
     return _lyap_taylorinteg!(f!, t, x, dx, q0, trange, abstol, jt, _dv, rv, cache,
         params, jacobianfunc!; parse_eqs, maxsteps)
 

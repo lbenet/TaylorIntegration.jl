@@ -223,18 +223,11 @@ function taylorinteg(f!, g, q0::Array{U,1}, t0::T, tmax::T,
     end
 
     # Allocation
-    cache = VectorCache(
-        Array{T}(undef, maxsteps + 1),
-        Array{U}(undef, dof, maxsteps + 1),
-        init_psol(Val(dense), maxsteps, dof, x),
-        Array{Taylor1{U}}(undef, dof))
+    cache = init_cache(VectorCache, Val(dense), t0, x, maxsteps)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
 
-    # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x .= Taylor1.( q0, order )
     return _taylorinteg!(Val(dense), f!, g, t, x, dx, q0, t0, tmax, abstol, rv, cache, params;
         parse_eqs, maxsteps, eventorder, newtoniter, nrabstol)
 end
@@ -328,26 +321,11 @@ function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
     end
 
     # Allocation
-    nn = length(trange)
-    dof = length(q0)
-    cache = VectorTRangeCache(
-        trange,
-        Array{U}(undef, dof, nn),
-        init_psol(Val(false), maxsteps, dof, x),
-        Array{Taylor1{U}}(undef, dof),
-        similar(q0),
-        similar(q0))
-    fill!(cache.x0, T(NaN))
-    for ind in 1:nn
-        @inbounds cache.xv[:,ind] .= cache.x0
-    end
+    cache = init_cache(VectorTRangeCache, Val(false), trange, x, maxsteps)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
 
-    # Re-initialize the Taylor1 expansions
-    t = t0 + Taylor1( T, order )
-    x .= Taylor1.(q0, order)
     return _taylorinteg!(f!, g, t, x, dx, q0, trange, abstol, rv, cache, params;
         parse_eqs, maxsteps, eventorder, newtoniter, nrabstol)
 end

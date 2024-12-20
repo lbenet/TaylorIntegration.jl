@@ -22,16 +22,16 @@ struct ScalarCache{TV, XV, PSOL} <: AbstractTaylorIntegrationCache
     psol::PSOL
 end
 
-function init_cache(::Type{ScalarCache}, dense::Val{D}, t0::T, x::Taylor1{U}, maxsteps::Int) where {D, U, T}
-    return ScalarCache(
+function init_cache(cachetype::Type{ScalarCache}, dense::Val{D}, t0::T, x::Taylor1{U}, maxsteps::Int) where {D, U, T}
+    return cachetype(
         Array{T}(undef, maxsteps + 1),
         Array{U}(undef, maxsteps + 1),
         init_psol(dense, maxsteps, 1, x))
 end
 
-function init_cache(::Type{ScalarCache}, ::Val{false}, trange::AbstractVector{T}, x::Taylor1{U}, maxsteps::Int) where {U, T}
+function init_cache(cachetype::Type{ScalarCache}, ::Val{false}, trange::AbstractVector{T}, x::Taylor1{U}, maxsteps::Int) where {U, T}
     nn = length(trange)
-    cache = ScalarCache(
+    cache = cachetype(
         trange,
         Array{U}(undef, nn),
         init_psol(Val(false), maxsteps, 1, x))
@@ -48,9 +48,9 @@ struct VectorCache{TV, XV, PSOL, XAUX} <: AbstractVectorCache
     xaux::XAUX
 end
 
-function init_cache(::Type{VectorCache}, dense::Val{D}, t0::T, x::Vector{Taylor1{U}}, maxsteps::Int) where {D, U, T}
+function init_cache(cachetype::Type{VectorCache}, dense::Val{D}, t0::T, x::Vector{Taylor1{U}}, maxsteps::Int) where {D, U, T}
     dof = length(x)
-    return VectorCache(
+    return cachetype(
         Array{T}(undef, maxsteps + 1),
         Array{U}(undef, dof, maxsteps + 1),
         init_psol(dense, maxsteps, dof, x),
@@ -68,10 +68,10 @@ struct VectorTRangeCache{TV, XV, PSOL, XAUX, X0, X1} <: AbstractVectorCache
     x1::X1
 end
 
-function init_cache(::Type{VectorTRangeCache}, ::Val{false}, trange::AbstractVector{T}, x::Vector{Taylor1{U}}, maxsteps::Int) where {U, T}
+function init_cache(cachetype::Type{VectorTRangeCache}, ::Val{false}, trange::AbstractVector{T}, x::Vector{Taylor1{U}}, maxsteps::Int) where {U, T}
     nn = length(trange)
     dof = length(x)
-    cache = VectorTRangeCache(
+    cache = cachetype(
         trange,
         Array{U}(undef, dof, nn),
         init_psol(Val(false), maxsteps, dof, x),
@@ -106,10 +106,10 @@ struct LyapunovSpectrumCache{TV, XV, PSOL, XAUX, X0, Λ, ΛTSUM, ΔX, DΔX, JAC,
     vⱼ::VJ
 end
 
-function init_cache(::Type{LyapunovSpectrumCache}, dense, t0::T, x::Vector{Taylor1{U}}, maxsteps::Int) where {U, T}
+function init_cache(cachetype::Type{LyapunovSpectrumCache}, dense, t0::T, x::Vector{Taylor1{U}}, maxsteps::Int) where {U, T}
     nx0 = length(x) # equals dof + dof^2
     dof = Int(sqrt(nx0 + 1/4) - 1/2)
-    cache = LyapunovSpectrumCache(
+    cache = cachetype(
         Array{T}(undef, maxsteps+1),
         Array{U}(undef, dof, maxsteps+1),
         nothing,
@@ -153,11 +153,11 @@ struct LyapunovSpectrumTRangeCache{TV, XV, PSOL, XAUX, X0, Q1, Λ, ΛTSUM, ΔX, 
     vⱼ::VJ
 end
 
-function init_cache(::Type{LyapunovSpectrumTRangeCache}, dense, trange::AbstractVector{T}, x::Vector{Taylor1{U}}, maxsteps::Int) where {U, T}
+function init_cache(cachetype::Type{LyapunovSpectrumTRangeCache}, dense, trange::AbstractVector{T}, x::Vector{Taylor1{U}}, maxsteps::Int) where {U, T}
     nx0 = length(x) # equals dof + dof^2
     dof = Int(sqrt(nx0 + 1/4) - 1/2)
     nn = length(trange)
-    cache = LyapunovSpectrumTRangeCache(
+    cache = cachetype(
         trange,
         Array{U}(undef, dof, nn),
         nothing,
