@@ -16,25 +16,40 @@ xaux(c::AbstractVectorCache) = c.xaux
 
 # ScalarCache
 
-struct ScalarCache{TV, XV, PSOL} <: AbstractTaylorIntegrationCache
+struct ScalarCache{TV, XV, PSOL, T, X} <: AbstractTaylorIntegrationCache
     tv::TV
     xv::XV
     psol::PSOL
+    t::T
+    x::X
 end
 
-function init_cache(cachetype::Type{ScalarCache}, dense::Val{D}, t0::T, x::Taylor1{U}, maxsteps::Int) where {D, U, T}
+function init_cache(cachetype::Type{ScalarCache}, dense::Val{D}, t0::T, x0::U, maxsteps::Int, order::Int) where {D, U, T}
+    # Initialize the Taylor1 expansions
+    t = t0 + Taylor1( T, order )
+    x = Taylor1( x0, order )
+    # Initialize cache
     return cachetype(
         Array{T}(undef, maxsteps + 1),
         Array{U}(undef, maxsteps + 1),
-        init_psol(dense, maxsteps, 1, x))
+        init_psol(dense, maxsteps, 1, x),
+        t,
+        x)
 end
 
-function init_cache(cachetype::Type{ScalarCache}, ::Val{false}, trange::AbstractVector{T}, x::Taylor1{U}, maxsteps::Int) where {U, T}
+function init_cache(cachetype::Type{ScalarCache}, ::Val{false}, trange::AbstractVector{T}, x0::U, maxsteps::Int, order::Int) where {U, T}
+    # Initialize the Taylor1 expansions
+    t0 = trange[1]
+    t = t0 + Taylor1( T, order )
+    x = Taylor1( x0, order )
+    # Initialize cache
     nn = length(trange)
     cache = cachetype(
         trange,
         Array{U}(undef, nn),
-        init_psol(Val(false), maxsteps, 1, x))
+        init_psol(Val(false), maxsteps, 1, x),
+        t,
+        x)
     fill!(cache.xv, T(NaN))
     return cache
 end

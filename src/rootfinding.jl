@@ -217,10 +217,8 @@ function taylorinteg(f!, g, q0::Array{U,1}, t0::T, tmax::T,
     t = t0 + Taylor1( T, order )
     x = Array{Taylor1{U}}(undef, dof)
     dx = Array{Taylor1{U}}(undef, dof)
-    @inbounds for i in eachindex(q0)
-        x[i] = Taylor1( q0[i], order )
-        dx[i] = Taylor1( zero(q0[i]), order )
-    end
+    x .= Taylor1.( q0, order )
+    dx .= Taylor1.( zero.(q0), order )
 
     # Allocation
     cache = init_cache(VectorCache, Val(dense), t0, x, maxsteps)
@@ -315,10 +313,8 @@ function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
     t = t0 + Taylor1( T, order )
     x = Array{Taylor1{U}}(undef, dof)
     dx = Array{Taylor1{U}}(undef, dof)
-    @inbounds for i in eachindex(q0)
-        x[i] = Taylor1( q0[i], order )
-        dx[i] = Taylor1( zero(q0[i]), order )
-    end
+    x .= Taylor1.( q0, order )
+    dx .= Taylor1.( zero.(q0), order )
 
     # Allocation
     cache = init_cache(VectorTRangeCache, Val(false), trange, x, maxsteps)
