@@ -212,30 +212,22 @@ function taylorinteg(f!, g, q0::Array{U,1}, t0::T, tmax::T,
 
     @assert order ≥ eventorder "`eventorder` must be less than or equal to `order`"
 
-    # Initialize the vector of Taylor1 expansions
-    dof = length(q0)
-    t = t0 + Taylor1( T, order )
-    x = Array{Taylor1{U}}(undef, dof)
-    dx = Array{Taylor1{U}}(undef, dof)
-    x .= Taylor1.( q0, order )
-    dx .= Taylor1.( zero.(q0), order )
-
     # Allocation
-    cache = init_cache(VectorCache, Val(dense), t0, x, maxsteps)
+    cache = init_cache(VectorCache, Val(dense), t0, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
-    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
+    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)
 
-    return _taylorinteg!(Val(dense), f!, g, t, x, dx, q0, t0, tmax, abstol, rv, cache, params;
+    return taylorinteg!(Val(dense), f!, g, q0, t0, tmax, abstol, rv, cache, params;
         parse_eqs, maxsteps, eventorder, newtoniter, nrabstol)
 end
 
-function _taylorinteg!(dense::Val{D}, f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
+function taylorinteg!(dense::Val{D}, f!, g,
         q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500, eventorder::Int=0,
         newtoniter::Int=10, nrabstol::T=eps(T)) where {T <: Real,U <: Number, D}
 
-    @unpack tv, xv, psol, xaux = cache
+    @unpack tv, xv, psol, xaux, t, x, dx = cache
 
     # Initial conditions
     order = get_order(t)
@@ -305,32 +297,23 @@ function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
 
     # Check if trange is increasingly or decreasingly sorted
     @assert (issorted(trange) ||
-        issorted(reverse(trange))) "`trange` or `reverse(trange)` must be sorted"
-
-    # Initialize the vector of Taylor1 expansions
-    dof = length(q0)
-    @inbounds t0 = trange[1]
-    t = t0 + Taylor1( T, order )
-    x = Array{Taylor1{U}}(undef, dof)
-    dx = Array{Taylor1{U}}(undef, dof)
-    x .= Taylor1.( q0, order )
-    dx .= Taylor1.( zero.(q0), order )
+        issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
-    cache = init_cache(VectorTRangeCache, Val(false), trange, x, maxsteps)
+    cache = init_cache(VectorTRangeCache, Val(false), trange, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
-    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
+    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)
 
-    return _taylorinteg!(f!, g, t, x, dx, q0, trange, abstol, rv, cache, params;
+    return taylorinteg!(f!, g, q0, trange, abstol, rv, cache, params;
         parse_eqs, maxsteps, eventorder, newtoniter, nrabstol)
 end
 
-function _taylorinteg!(f!, g, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
+function taylorinteg!(f!, g,
         q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500, eventorder::Int=0, newtoniter::Int=10, nrabstol::T=eps(T)) where {T <: Real,U <: Number}
 
-    @unpack tv, xv, xaux, x0, x1 = cache
+    @unpack tv, xv, xaux, x0, x1, t, x, dx = cache
 
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]

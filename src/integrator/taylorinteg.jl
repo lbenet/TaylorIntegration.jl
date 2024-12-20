@@ -57,14 +57,14 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, cache.t, cache.x, params)
 
-    return _taylorinteg!(Val(dense), f, x0, t0, tmax, abstol, rv, cache, params; parse_eqs, maxsteps)
+    return taylorinteg!(Val(dense), f, x0, t0, tmax, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
-function _taylorinteg!(dense::Val{D}, f,
+function taylorinteg!(dense::Val{D}, f,
         x0::U, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::ScalarCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
-    @unpack t, x, tv, xv, psol = cache
+    @unpack tv, xv, psol, t, x = cache
 
     # Initial conditions
     nsteps = 1
@@ -98,32 +98,24 @@ function _taylorinteg!(dense::Val{D}, f,
 end
 
 
-function taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T, order::Int, abstol::T, params = nothing;
+function taylorinteg(f!, q0::Vector{U}, t0::T, tmax::T, order::Int, abstol::T, params = nothing;
         maxsteps::Int=500, parse_eqs::Bool=true, dense::Bool=true) where {T<:Real, U<:Number}
 
-    # Initialize the vector of Taylor1 expansions
-    dof = length(q0)
-    t = t0 + Taylor1( T, order )
-    x = Array{Taylor1{U}}(undef, dof)
-    dx = Array{Taylor1{U}}(undef, dof)
-    x .= Taylor1.( q0, order )
-    dx .= Taylor1.( zero.(q0), order )
-
     # Allocation
-    cache = init_cache(VectorCache, Val(dense), t0, x, maxsteps)
+    cache = init_cache(VectorCache, Val(dense), t0, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
-    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
+    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)
 
-    return _taylorinteg!(Val(dense), f!, t, x, dx, q0, t0, tmax, abstol, rv,
+    return taylorinteg!(Val(dense), f!, q0, t0, tmax, abstol, rv,
         cache, params; parse_eqs, maxsteps)
 end
 
-function _taylorinteg!(dense::Val{D}, f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
+function taylorinteg!(dense::Val{D}, f!,
         q0::Array{U,1}, t0::T, tmax::T, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real,U<:Number,D}
 
-    @unpack tv, xv, psol, xaux = cache
+    @unpack tv, xv, psol, xaux, t, x, dx = cache
 
     # Initial conditions
     @inbounds t[0] = t0
@@ -257,7 +249,7 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
 
     # Check if trange is increasingly or decreasingly sorted
     @assert (issorted(trange) ||
-        issorted(reverse(trange))) "`trange` or `reverse(trange)` must be sorted"
+        issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
     cache = init_cache(ScalarCache, Val(false), trange, x0, maxsteps, order)
@@ -265,13 +257,13 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, cache.t, cache.x, params)
 
-    return _taylorinteg!(f, x0, trange, abstol, rv, cache, params; parse_eqs, maxsteps)
+    return taylorinteg!(f, x0, trange, abstol, rv, cache, params; parse_eqs, maxsteps)
 end
 
-function _taylorinteg!(f, x0::U, trange::AbstractVector{T},
+function taylorinteg!(f, x0::U, trange::AbstractVector{T},
         abstol::T, rv::RetAlloc{Taylor1{U}}, cache::ScalarCache, params; parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
-    @unpack t, x, xv = cache
+    @unpack xv, t, x = cache
 
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
@@ -313,38 +305,29 @@ function _taylorinteg!(f, x0::U, trange::AbstractVector{T},
     return build_solution(trange, xv)
 end
 
-function taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
+function taylorinteg(f!, q0::Vector{U}, trange::AbstractVector{T},
         order::Int, abstol::T, params = nothing;
         maxsteps::Int=500, parse_eqs::Bool=true) where {T<:Real, U<:Number}
 
     # Check if trange is increasingly or decreasingly sorted
     @assert (issorted(trange) ||
-        issorted(reverse(trange))) "`trange` or `reverse(trange)` must be sorted"
-
-    # Initialize the vector of Taylor1 expansions
-    dof = length(q0)
-    t0 = trange[1]
-    t = t0 + Taylor1( T, order )
-    x = Array{Taylor1{U}}(undef, dof)
-    dx = Array{Taylor1{U}}(undef, dof)
-    x .= Taylor1.( q0, order )
-    dx .= Taylor1.( zero.(q0), order )
+        issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
-    cache = init_cache(VectorTRangeCache, Val(false), trange, x, maxsteps)
+    cache = init_cache(VectorTRangeCache, Val(false), trange, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
-    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, t, x, dx, params)
+    parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)
 
-    return _taylorinteg!(f!, t, x, dx, q0, trange, abstol, rv,
+    return taylorinteg!(f!, q0, trange, abstol, rv,
         cache, params; parse_eqs, maxsteps)
 end
 
-function _taylorinteg!(f!, t::Taylor1{T}, x::Array{Taylor1{U},1}, dx::Array{Taylor1{U},1},
-        q0::Array{U,1}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorTRangeCache, params;
+function taylorinteg!(f!,
+        q0::Vector{U}, trange::AbstractVector{T}, abstol::T, rv::RetAlloc{Taylor1{U}}, cache::VectorTRangeCache, params;
         parse_eqs::Bool=true, maxsteps::Int=500) where {T<:Real, U<:Number}
 
-    @unpack xv, xaux, x0, x1 = cache
+    @unpack xv, xaux, x0, x1, t, x, dx = cache
 
     # Initial conditions
     @inbounds t[0] = trange[1]
