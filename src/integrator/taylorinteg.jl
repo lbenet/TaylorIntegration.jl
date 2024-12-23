@@ -80,9 +80,8 @@ function taylorinteg!(dense::Val{D}, f,
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         x0 = evaluate(x, δt) # new initial condition
         set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
-        @inbounds x[0] = x0
         t0 += δt
-        @inbounds t[0] = t0
+        update!(cache, t0, x0)
         nsteps += 1
         @inbounds tv[nsteps] = t0
         @inbounds xv[nsteps] = x0
@@ -132,12 +131,8 @@ function taylorinteg!(dense::Val{D}, f!,
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         evaluate!(x, δt, x0) # new initial condition
         set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-            TaylorSeries.zero!(dx[i], 0)
-        end
         t0 += δt
-        @inbounds t[0] = t0
+        update!(cache, t0, x0)
         nsteps += 1
         @inbounds tv[nsteps] = t0
         @inbounds xv[:,nsteps] .= deepcopy.(x0)
@@ -291,9 +286,8 @@ function taylorinteg!(f, x0::U, trange::AbstractVector{T},
             @inbounds xv[iter] = x0
             break
         end
-        @inbounds x[0] = x0
         t0 = tnext
-        @inbounds t[0] = t0
+        update!(cache, t0, x0)
         nsteps += 1
         if nsteps > maxsteps
             @warn("""
@@ -357,12 +351,8 @@ function taylorinteg!(f!,
             @inbounds xv[:,iter] .= x0
             break
         end
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-            dx[i][0] = zero(x0[i])
-        end
         t0 = tnext
-        @inbounds t[0] = t0
+        update!(cache, t0, x0)
         nsteps += 1
         if nsteps > maxsteps
             @warn("""

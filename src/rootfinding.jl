@@ -269,12 +269,8 @@ function taylorinteg!(dense::Val{D}, f!, g,
             tvS, xvS, gvS, t0, δt_old, x_dx, x_dx_val, g_dg, g_dg_val,
             nrabstol, newtoniter, nevents)
         g_tupl_old = deepcopy(g_tupl)
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-            TaylorSeries.zero!(dx[i], 0)
-        end
         t0 += δt
-        @inbounds t[0] = t0
+        update!(cache, t0, x0)
         nsteps += 1
         @inbounds cache.tv[nsteps] = t0
         @inbounds cache.xv[:,nsteps] .= deepcopy(x0)
@@ -363,11 +359,8 @@ function taylorinteg!(f!, g,
             tvS, xvS, gvS, t0, δt_old, x_dx, x_dx_val, g_dg, g_dg_val,
             nrabstol, newtoniter, nevents)
         g_tupl_old = deepcopy(g_tupl)
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-        end
         t0 = tnext
-        @inbounds t[0] = t0
+        update!(cache, t0, x0)
         nsteps += 1
         if nsteps > maxsteps
             @warn("""

@@ -7,6 +7,8 @@ abstract type AbstractTaylorIntegrationCache end
 tv(c::AbstractTaylorIntegrationCache) = c.tv
 xv(c::AbstractTaylorIntegrationCache) = c.xv
 psol(c::AbstractTaylorIntegrationCache) = c.psol
+t(c::AbstractTaylorIntegrationCache) = c.t
+x(c::AbstractTaylorIntegrationCache) = c.x
 
 # AbstractVectorCache interface
 
@@ -206,7 +208,7 @@ function init_cache(cachetype::Type{LyapunovSpectrumCache}, dense, t0::T, q0::Ve
         Array{Taylor1{U}}(undef, nx0),
         x0,
         Array{U}(undef, dof, maxsteps+1),
-        similar(constant_term.(x[1:dof])),
+        similar(q0),
         Array{TaylorN{Taylor1{U}}}(undef, dof),
         Array{TaylorN{Taylor1{U}}}(undef, dof),
         Array{Taylor1{U}}(undef, dof, dof),
@@ -242,10 +244,10 @@ function init_cache(cachetype::Type{LyapunovSpectrumTRangeCache}, dense, trange:
         Array{U}(undef, dof, nn),
         nothing,
         Array{Taylor1{U}}(undef, nx0),
-        similar(constant_term.(x)),
-        similar(constant_term.(x[1:dof])),
+        similar(x0),
+        similar(q0),
         Array{U}(undef, dof, nn),
-        similar(constant_term.(x[1:dof])),
+        similar(q0),
         Array{TaylorN{Taylor1{U}}}(undef, dof),
         Array{TaylorN{Taylor1{U}}}(undef, dof),
         Array{Taylor1{U}}(undef, dof, dof),
@@ -264,4 +266,22 @@ function init_cache(cachetype::Type{LyapunovSpectrumTRangeCache}, dense, trange:
     fill!(cache.xv, U(NaN))
     fill!(cache.λ, U(NaN))
     return cache
+end
+
+ # update!
+
+function update!(cache::ScalarCache, t0::T, x0::U) where {T, U}
+    @unpack t, x = cache
+    @inbounds x[0] = x0
+    @inbounds t[0] = t0
+    return nothing
+end
+
+function update!(cache::AbstractVectorCache, t0::T, x0::Vector{U}) where {T, U}
+    @unpack t, x = cache
+    @inbounds for i in eachindex(x0)
+        x[i][0] = x0[i]
+    end
+    @inbounds t[0] = t0
+    return nothing
 end

@@ -309,7 +309,6 @@ function lyap_taylorinteg!(f!,
         end
         modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
         t0 += δt
-        @inbounds t[0] = t0
         tspan = t0-t00
         nsteps += 1
         @inbounds tv[nsteps] = t0
@@ -321,10 +320,7 @@ function lyap_taylorinteg!(f!,
         for ind in eachindex(QH)
             @inbounds x0[dof+ind] = QH[ind]
         end
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-            TaylorSeries.zero!(dx[i], 0)
-        end
+        update!(cache, t0, x0)
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -434,7 +430,6 @@ function lyap_taylorinteg!(f!,
         modifiedGS!( jt, QH, RH, aⱼ, qᵢ, vⱼ )
 
         t0 = tnext
-        @inbounds t[0] = t0
         nsteps += 1
         @inbounds for ind in eachindex(q0)
             λtsum[ind] += log(RH[ind,ind])
@@ -442,10 +437,7 @@ function lyap_taylorinteg!(f!,
         for ind in eachindex(QH)
             @inbounds x0[dof+ind] = QH[ind]
         end
-        @inbounds for i in eachindex(x0)
-            x[i][0] = x0[i]
-            TaylorSeries.zero!(dx[i], 0)
-        end
+        update!(cache, t0, x0)
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
