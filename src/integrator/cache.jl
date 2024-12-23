@@ -125,11 +125,11 @@ end
 
 # init_cache
 
-function init_cache(cachetype::Type{ScalarCache}, dense::Val{D}, t0::T, x0::U, maxsteps::Int, order::Int) where {D, U, T}
+function init_cache(dense::Val{D}, t0::T, x0::U, maxsteps::Int, order::Int) where {D, U, T}
     # Initialize the Taylor1 expansions
     t, x = init_expansions(t0, x0, order)
     # Initialize cache
-    return cachetype(
+    return ScalarCache(
         Array{T}(undef, maxsteps + 1),
         Array{U}(undef, maxsteps + 1),
         init_psol(dense, maxsteps, 1, x),
@@ -137,13 +137,13 @@ function init_cache(cachetype::Type{ScalarCache}, dense::Val{D}, t0::T, x0::U, m
         x)
 end
 
-function init_cache(cachetype::Type{ScalarCache}, ::Val{false}, trange::AbstractVector{T}, x0::U, maxsteps::Int, order::Int) where {U, T}
+function init_cache(::Val{false}, trange::AbstractVector{T}, x0::U, maxsteps::Int, order::Int) where {U, T}
     # Initialize the Taylor1 expansions
     t0 = trange[1]
     t, x = init_expansions(t0, x0, order)
     # Initialize cache
     nn = length(trange)
-    cache = cachetype(
+    cache = ScalarCache(
         trange,
         Array{U}(undef, nn),
         init_psol(Val(false), maxsteps, 1, x),
@@ -153,12 +153,12 @@ function init_cache(cachetype::Type{ScalarCache}, ::Val{false}, trange::Abstract
     return cache
 end
 
-function init_cache(cachetype::Type{VectorCache}, dense::Val{D}, t0::T, q0::Vector{U}, maxsteps::Int, order::Int) where {D, U, T}
+function init_cache(dense::Val{D}, t0::T, q0::Vector{U}, maxsteps::Int, order::Int) where {D, U, T}
     # Initialize the vector of Taylor1 expansions
     t, x, dx = init_expansions(t0, q0, order)
     # Initialize cache
     dof = length(q0)
-    return cachetype(
+    return VectorCache(
         Array{T}(undef, maxsteps + 1),
         Array{U}(undef, dof, maxsteps + 1),
         init_psol(dense, maxsteps, dof, x),
@@ -168,14 +168,14 @@ function init_cache(cachetype::Type{VectorCache}, dense::Val{D}, t0::T, q0::Vect
         dx)
 end
 
-function init_cache(cachetype::Type{VectorTRangeCache}, ::Val{false}, trange::AbstractVector{T}, q0::Vector{U}, maxsteps::Int, order::Int) where {U, T}
+function init_cache(::Val{false}, trange::AbstractVector{T}, q0::Vector{U}, maxsteps::Int, order::Int) where {U, T}
     # Initialize the vector of Taylor1 expansions
     t0 = trange[1]
     t, x, dx = init_expansions(t0, q0, order)
     # Initialize cache
     nn = length(trange)
     dof = length(q0)
-    cache = cachetype(
+    cache = VectorTRangeCache(
         trange,
         Array{U}(undef, dof, nn),
         init_psol(Val(false), maxsteps, dof, x),
@@ -192,7 +192,7 @@ function init_cache(cachetype::Type{VectorTRangeCache}, ::Val{false}, trange::Ab
     return cache
 end
 
-function init_cache(cachetype::Type{LyapunovSpectrumCache}, dense, t0::T, q0::Vector{U}, maxsteps::Int, order::Int) where {U, T}
+function init_cache_lyap(t0::T, q0::Vector{U}, maxsteps::Int, order::Int) where {U, T}
     # Initialize the vector of Taylor1 expansions
     dof = length(q0)
     jt = Matrix{U}(I, dof, dof)
@@ -201,7 +201,7 @@ function init_cache(cachetype::Type{LyapunovSpectrumCache}, dense, t0::T, q0::Ve
     # Initialize cache
     nx0 = length(x0)
     dvars = Array{TaylorN{Taylor1{U}}}(undef, dof)
-    cache = cachetype(
+    cache = LyapunovSpectrumCache(
         Array{T}(undef, maxsteps+1),
         Array{U}(undef, dof, maxsteps+1),
         nothing,
@@ -228,7 +228,7 @@ function init_cache(cachetype::Type{LyapunovSpectrumCache}, dense, t0::T, q0::Ve
     return cache
 end
 
-function init_cache(cachetype::Type{LyapunovSpectrumTRangeCache}, dense, trange::AbstractVector{T}, q0::Vector{U}, maxsteps::Int, order::Int) where {U, T}
+function init_cache_lyap(trange::AbstractVector{T}, q0::Vector{U}, maxsteps::Int, order::Int) where {U, T}
     # Initialize the vector of Taylor1 expansions
     t0 = trange[1]
     dof = length(q0)
@@ -239,7 +239,7 @@ function init_cache(cachetype::Type{LyapunovSpectrumTRangeCache}, dense, trange:
     nn = length(trange)
     nx0 = length(x0)
     dvars = Array{TaylorN{Taylor1{U}}}(undef, dof)
-    cache = cachetype(
+    cache = LyapunovSpectrumTRangeCache(
         trange,
         Array{U}(undef, dof, nn),
         nothing,

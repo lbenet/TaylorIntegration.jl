@@ -213,7 +213,7 @@ function taylorinteg(f!, g, q0::Array{U,1}, t0::T, tmax::T,
     @assert order ≥ eventorder "`eventorder` must be less than or equal to `order`"
 
     # Allocation
-    cache = init_cache(VectorCache, Val(dense), t0, q0, maxsteps, order)
+    cache = init_cache(Val(dense), t0, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)
@@ -296,7 +296,7 @@ function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
         issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
-    cache = init_cache(VectorTRangeCache, Val(false), trange, q0, maxsteps, order)
+    cache = init_cache(Val(false), trange, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)

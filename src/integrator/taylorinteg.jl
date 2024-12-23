@@ -52,7 +52,7 @@ function taylorinteg(f, x0::U, t0::T, tmax::T, order::Int, abstol::T, params = n
         maxsteps::Int=500, parse_eqs::Bool=true, dense::Bool=true) where {T<:Real, U<:Number}
 
     # Allocation
-    cache = init_cache(ScalarCache, Val(dense), t0, x0, maxsteps, order)
+    cache = init_cache(Val(dense), t0, x0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, cache.t, cache.x, params)
@@ -101,7 +101,7 @@ function taylorinteg(f!, q0::Vector{U}, t0::T, tmax::T, order::Int, abstol::T, p
         maxsteps::Int=500, parse_eqs::Bool=true, dense::Bool=true) where {T<:Real, U<:Number}
 
     # Allocation
-    cache = init_cache(VectorCache, Val(dense), t0, q0, maxsteps, order)
+    cache = init_cache(Val(dense), t0, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)
@@ -247,7 +247,7 @@ function taylorinteg(f, x0::U, trange::AbstractVector{T},
         issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
-    cache = init_cache(ScalarCache, Val(false), trange, x0, maxsteps, order)
+    cache = init_cache(Val(false), trange, x0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f, cache.t, cache.x, params)
@@ -308,7 +308,7 @@ function taylorinteg(f!, q0::Vector{U}, trange::AbstractVector{T},
         issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
-    cache = init_cache(VectorTRangeCache, Val(false), trange, q0, maxsteps, order)
+    cache = init_cache(Val(false), trange, q0, maxsteps, order)
 
     # Determine if specialized jetcoeffs! method exists
     parse_eqs, rv = _determine_parsing!(parse_eqs, f!, cache.t, cache.x, cache.dx, params)

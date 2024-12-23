@@ -1331,8 +1331,8 @@ import Logging: Warn
             _T = eltype(_t0)
             _U = eltype(_q0)
             # Allocation
-            _cache_true = TaylorIntegration.init_cache(TaylorIntegration.VectorCache, Val(true), _t0, _q0, _maxsteps, _order)
-            _cache_false = TaylorIntegration.init_cache(TaylorIntegration.VectorCache, Val(false), _t0, _q0, _maxsteps, _order)
+            _cache_true = TaylorIntegration.init_cache(Val(true), _t0, _q0, _maxsteps, _order)
+            _cache_false = TaylorIntegration.init_cache(Val(false), _t0, _q0, _maxsteps, _order)
             # Determine if specialized jetcoeffs! method exists
             __parse_eqs, __rv = TaylorIntegration._determine_parsing!(true, kepler1!, _cache_true.t, _cache_true.x, _cache_true.dx, _params);
             solTN = @inferred TaylorIntegration.taylorinteg!(Val(true), kepler1!, _q0, _t0, _tmax, _abstol, __rv, _cache_true, _params; parse_eqs=__parse_eqs, maxsteps=_maxsteps)

@@ -255,7 +255,7 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, t0::T, tmax::T,
     dof = length(q0)
 
     # Allocation
-    cache = init_cache(LyapunovSpectrumCache, Val(false), t0, q0, maxsteps, order)
+    cache = init_cache_lyap(t0, q0, maxsteps, order)
 
     # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
     if isa(jacobianfunc!, Nothing)
@@ -344,7 +344,7 @@ function lyap_taylorinteg(f!, q0::Array{U,1}, trange::AbstractVector{T},
         issorted(trange, rev=true)) "`trange` or `reverse(trange)` must be sorted"
 
     # Allocation
-    cache = init_cache(LyapunovSpectrumTRangeCache, Val(false), trange, q0, maxsteps, order)
+    cache = init_cache_lyap(trange, q0, maxsteps, order)
 
     # If user does not provide Jacobian, check number of TaylorN variables and initialize _dv
     if isnothing(jacobianfunc!)
