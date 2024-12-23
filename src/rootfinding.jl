@@ -232,8 +232,6 @@ function taylorinteg!(dense::Val{D}, f!, g,
     # Initial conditions
     order = get_order(t)
     x0 = deepcopy(q0)
-    x .= Taylor1.(q0, order)
-    dx .= zero.(x)
     @inbounds cache.tv[1] = t0
     @inbounds cache.xv[:,1] .= deepcopy(q0)
     sign_tstep = copysign(1, tmax-t0)
