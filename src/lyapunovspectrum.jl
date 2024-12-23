@@ -285,7 +285,6 @@ function lyap_taylorinteg!(f!,
     dof = length(q0)
 
     # Initial conditions
-    @inbounds t[0] = t0
     sign_tstep = copysign(1, tmax-t0)
     t00 = t0
     tspan = zero(T)
@@ -375,7 +374,6 @@ function lyap_taylorinteg!(f!,
     dof = length(q0)
 
     # Initial conditions
-    @inbounds t[0] = trange[1]
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
     t00 = t0

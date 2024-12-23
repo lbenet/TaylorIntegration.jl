@@ -231,7 +231,6 @@ function taylorinteg!(dense::Val{D}, f!, g,
 
     # Initial conditions
     order = get_order(t)
-    @inbounds t[0] = t0
     x0 = deepcopy(q0)
     x .= Taylor1.(q0, order)
     dx .= zero.(x)

@@ -1339,6 +1339,9 @@ import Logging: Warn
             solTN2 = @inferred TaylorIntegration.taylorinteg!(Val(false), kepler1!, _q0, _t0, _tmax, _abstol, __rv, _cache_false, _params; parse_eqs=__parse_eqs, maxsteps=_maxsteps)
             @test solTN isa TaylorSolution{typeof(_t0), eltype(_q0), ndims(solTN.x), typeof(solTN.t), typeof(solTN.x), typeof(solTN.p), Nothing, Nothing, Nothing}
             @test solTN2 isa TaylorSolution{typeof(_t0), eltype(_q0), ndims(solTN.x), typeof(solTN.t), typeof(solTN.x), Nothing, Nothing, Nothing, Nothing}
+            # # test cache update
+            # TaylorIntegration.update!(_cache_true, _t0, _q0)
+            # solTN = TaylorIntegration.taylorinteg!(Val(true), kepler1!, _q0, _t0, _tmax, _abstol, __rv, _cache_true, _params; parse_eqs=__parse_eqs, maxsteps=_maxsteps)
         end
     end
 
