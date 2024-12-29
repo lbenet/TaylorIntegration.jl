@@ -281,7 +281,6 @@ function lyap_taylorinteg!(f!,
     @unpack tv, xv, xaux, x0, λ, λtsum, δx, dδx, jac, varsaux, QH, RH, aⱼ, qᵢ, vⱼ, t, x, dx, jt, dvars = cache
 
     # Allocation
-    order = get_order(t)
     dof = length(q0)
 
     # Initial conditions
@@ -370,7 +369,6 @@ function lyap_taylorinteg!(f!,
     @unpack xv, xaux, x0, q1, λ, λtsum, δx, dδx, jac, varsaux, QH, RH, aⱼ, qᵢ, vⱼ, t, x, dx, jt, dvars = cache
 
     # Auxiliary variables
-    order = get_order(t)
     dof = length(q0)
 
     # Initial conditions

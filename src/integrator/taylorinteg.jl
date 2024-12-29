@@ -67,6 +67,7 @@ function taylorinteg!(dense::Val{D}, f,
     @unpack tv, xv, psol, t, x = cache
 
     # Initial conditions
+    update!(cache, t0, x0)
     nsteps = 1
     @inbounds tv[1] = t0
     @inbounds xv[1] = x0
@@ -117,6 +118,7 @@ function taylorinteg!(dense::Val{D}, f!,
 
     # Initial conditions
     x0 = deepcopy(q0)
+    update!(cache, t0, x0)
     @inbounds tv[1] = t0
     @inbounds xv[:,1] .= q0
     sign_tstep = copysign(1, tmax-t0)
@@ -260,6 +262,7 @@ function taylorinteg!(f, x0::U, trange::AbstractVector{T},
 
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
+    update!(cache, t0, x0)
     sign_tstep = copysign(1, tmax-t0)
     @inbounds xv[1] = x0
 
@@ -324,6 +327,7 @@ function taylorinteg!(f!,
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
     @inbounds x0 .= deepcopy(q0)
+    update!(cache, t0, x0)
     @inbounds xv[:,1] .= q0
 
     # Integration

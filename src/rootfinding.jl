@@ -230,10 +230,10 @@ function taylorinteg!(dense::Val{D}, f!, g,
     @unpack tv, xv, psol, xaux, t, x, dx = cache
 
     # Initial conditions
-    order = get_order(t)
     x0 = deepcopy(q0)
-    @inbounds cache.tv[1] = t0
-    @inbounds cache.xv[:,1] .= deepcopy(q0)
+    update!(cache, t0, x0)
+    @inbounds tv[1] = t0
+    @inbounds xv[:,1] .= deepcopy(q0)
     sign_tstep = copysign(1, tmax-t0)
 
     # Some auxiliary arrays for root-finding/event detection/Poincaré surface of section evaluation
@@ -248,7 +248,7 @@ function taylorinteg!(dense::Val{D}, f!, g,
     g_dg_val = vcat(evaluate(g_tupl[2]), evaluate(g_tupl_old[2]))
 
     tvS = Array{U}(undef, maxsteps+1)
-    xvS = similar(cache.xv)
+    xvS = similar(xv)
     gvS = similar(tvS)
 
     # Integration
@@ -256,11 +256,11 @@ function taylorinteg!(dense::Val{D}, f!, g,
     nevents = 1 #number of detected events
     while sign_tstep*t0 < sign_tstep*tmax
         δt_old = δt
-        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, cache.xaux, abstol, params, rv) # δt is positive!
+        δt = taylorstep!(Val(parse_eqs), f!, t, x, dx, xaux, abstol, params, rv) # δt is positive!
         # Below, δt has the proper sign according to the direction of the integration
         δt = sign_tstep * min(δt, sign_tstep*(tmax-t0))
         evaluate!(x, δt, x0) # new initial condition
-        set_psol!(dense, cache.psol, nsteps, x) # Store the Taylor polynomial solution
+        set_psol!(dense, psol, nsteps, x) # Store the Taylor polynomial solution
         g_tupl = g(dx, x, params, t)
         nevents = findroot!(t, x, dx, g_tupl_old, g_tupl, eventorder,
             tvS, xvS, gvS, t0, δt_old, x_dx, x_dx_val, g_dg, g_dg_val,
@@ -269,8 +269,8 @@ function taylorinteg!(dense::Val{D}, f!, g,
         t0 += δt
         update!(cache, t0, x0)
         nsteps += 1
-        @inbounds cache.tv[nsteps] = t0
-        @inbounds cache.xv[:,nsteps] .= deepcopy(x0)
+        @inbounds tv[nsteps] = t0
+        @inbounds xv[:,nsteps] .= deepcopy(x0)
         if nsteps > maxsteps
             @warn("""
             Maximum number of integration steps reached; exiting.
@@ -279,7 +279,7 @@ function taylorinteg!(dense::Val{D}, f!, g,
         end
     end
 
-    return build_solution(cache.tv, cache.xv, cache.psol, tvS, xvS, gvS, nsteps, nevents)
+    return build_solution(tv, xv, psol, tvS, xvS, gvS, nsteps, nevents)
 end
 
 function taylorinteg(f!, g, q0::Array{U,1}, trange::AbstractVector{T},
@@ -311,7 +311,8 @@ function taylorinteg!(f!, g,
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
-    x0 .= deepcopy(q0)
+    @inbounds x0 .= deepcopy(q0)
+    update!(cache, t0, x0)
     @inbounds xv[:,1] .= deepcopy(q0)
 
     # Some auxiliary arrays for root-finding/event detection/Poincaré surface of section evaluation
