@@ -196,7 +196,9 @@ function init_cache_lyap(t0::T, q0::Vector{U}, maxsteps::Int, order::Int) where 
     # Initialize the vector of Taylor1 expansions
     dof = length(q0)
     jt = Matrix{U}(I, dof, dof)
-    x0 = vcat(q0, reshape(jt, dof*dof))
+    x0 = similar(q0, dof + dof*dof)
+    x0[1:dof] .= q0
+    @views x0[dof+1:end] .= jt[:]
     t, x, dx = init_expansions(t0, x0, order)
     # Initialize cache
     nx0 = length(x0)
@@ -233,7 +235,9 @@ function init_cache_lyap(trange::AbstractVector{T}, q0::Vector{U}, maxsteps::Int
     t0 = trange[1]
     dof = length(q0)
     jt = Matrix{U}(I, dof, dof)
-    x0 = vcat(q0, reshape(jt, dof*dof))
+    x0 = similar(q0, dof + dof*dof)
+    x0[1:dof] .= q0
+    @views x0[dof+1:end] .= jt[:]
     t, x, dx = init_expansions(t0, x0, order)
     # Initialize cache
     nn = length(trange)
@@ -244,7 +248,7 @@ function init_cache_lyap(trange::AbstractVector{T}, q0::Vector{U}, maxsteps::Int
         Array{U}(undef, dof, nn),
         nothing,
         Array{Taylor1{U}}(undef, nx0),
-        similar(x0),
+        x0,
         similar(q0),
         Array{U}(undef, dof, nn),
         similar(q0),

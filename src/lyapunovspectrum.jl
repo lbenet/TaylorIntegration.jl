@@ -285,6 +285,9 @@ function lyap_taylorinteg!(f!,
 
     # Initial conditions
     sign_tstep = copysign(1, tmax-t0)
+    x0[1:dof] .= q0
+    @views x0[dof+1:end] .= jt[:]
+    update!(cache, t0, x0)
     t00 = t0
     tspan = zero(T)
     @inbounds tv[1] = t0
@@ -374,6 +377,9 @@ function lyap_taylorinteg!(f!,
     # Initial conditions
     @inbounds t0, t1, tmax = trange[1], trange[2], trange[end]
     sign_tstep = copysign(1, tmax-t0)
+    x0[1:dof] .= q0
+    @views x0[dof+1:end] .= jt[:]
+    update!(cache, t0, x0)
     t00 = t0
     tspan = zero(T)
     @inbounds for ind in eachindex(q0)
