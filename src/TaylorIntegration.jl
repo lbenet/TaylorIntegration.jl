@@ -7,6 +7,7 @@ using Reexport
 using LinearAlgebra
 using Markdown
 using InteractiveUtils #: methodswith
+using Parameters
 if !isdefined(Base, :get_extension)
     using Requires
 end
@@ -14,6 +15,7 @@ end
 export TaylorSolution, taylorinteg, lyap_taylorinteg, @taylorize
 
 include("parse_eqs.jl")
+include("integrator/cache.jl")
 include("integrator/jetcoeffs.jl")
 include("integrator/stepsize.jl")
 include("integrator/taylorstep.jl")
