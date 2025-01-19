@@ -18,6 +18,7 @@ lyap_taylorinteg
 
 ```@docs
 TaylorSolution
+ADSTaylorSolution
 ```
 
 ## Internal

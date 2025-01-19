@@ -7,11 +7,15 @@ using Reexport
 using LinearAlgebra
 using Markdown
 using InteractiveUtils #: methodswith
+using StaticArrays: SVector
+using AbstractTrees
+using LsqFit: curve_fit
+
 if !isdefined(Base, :get_extension)
     using Requires
 end
 
-export TaylorSolution, taylorinteg, lyap_taylorinteg, @taylorize
+export TaylorSolution, ADSTaylorSolution, taylorinteg, lyap_taylorinteg, @taylorize
 
 include("parse_eqs.jl")
 include("integrator/jetcoeffs.jl")
@@ -22,6 +26,7 @@ include("integrator/taylorinteg.jl")
 include("lyapunovspectrum.jl")
 include("rootfinding.jl")
 include("common.jl")
+include("ads.jl")
 
 function __init__()
 
