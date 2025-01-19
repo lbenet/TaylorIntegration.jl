@@ -72,6 +72,11 @@ struct TaylorMethodConstantCache{uTType} <: OrdinaryDiffEqConstantCache
     rv::RetAlloc{uTType}
 end
 
+# NOTE: This de-facto implies support Julia from v1.10 onwards
+if VERSION >= v"1.10"
+    OrdinaryDiffEq.get_fsalfirstlast(cache::TaylorMethodCache, u) = (cache.fsalfirst, cache.k)
+end
+
 function OrdinaryDiffEq.alg_cache(alg::TaylorMethodParams, u, rate_prototype, uEltypeNoUnits,
         uBottomEltypeNoUnits, tTypeNoUnits, uprev, uprev2, f, t, dt, reltol, p,
         calck,::Val{true})
